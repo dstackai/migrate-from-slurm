@@ -16,6 +16,17 @@ Login nodes serve as the entry point for users to interact with the cluster.
 
 - **Purpose**: Login nodes are where users submit jobs (`sbatch`), query the queue (`squeue`), and access shared filesystems. They are **not** for running compute workloads.
 - **SSH access**: When `salloc` creates an allocation, users can SSH directly to allocated nodes listed in `SLURM_NODELIST`.
+- **Example: accessing allocated nodes** (from login node after salloc):
+  ```bash
+  # Allocate resources interactively
+  salloc --nodes=2 --time=1:00:00
+  
+  # SSH to first allocated node
+  ssh $SLURM_NODELIST
+  
+  # Or use srun to run commands on allocated nodes
+  srun hostname
+  ```
 
 ### Network security and ports
 
@@ -30,6 +41,15 @@ MUNGE (MUNGE Uid 'N' Gid Emporium) provides secure authentication between Slurm 
 - **Token-based communication**: MUNGE generates cryptographic tokens that authenticate messages between `slurmctld`, `slurmd`, and `slurmdbd`. This prevents unauthorized nodes from joining the cluster.
 - **Shared secret**: All nodes must share the same MUNGE key. The key must be identical across all nodes in the cluster.
 - **Key distribution**: The MUNGE key must be securely distributed to all nodes. It should have restricted permissions (readable only by the `munge` user).
+- **Example: MUNGE key location** (on all nodes):
+  ```bash
+  # MUNGE key typically located at
+  /etc/munge/munge.key
+  
+  # Permissions should be restricted
+  chmod 400 /etc/munge/munge.key
+  chown munge:munge /etc/munge/munge.key
+  ```
 - **Token expiration**: MUNGE tokens have a limited lifetime (configurable), requiring periodic re-authentication.
 - **Token refresh**: MUNGE automatically refreshes tokens before expiration. Daemons maintain authenticated sessions by periodically exchanging new tokens. If a token expires, the daemon requests a new one transparently.
 

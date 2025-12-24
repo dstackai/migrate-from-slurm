@@ -12,6 +12,64 @@ Slurm provides command-line tools for monitoring cluster state, jobs, and histor
 - **`sstat`**: Shows resource usage statistics for **running** jobs only. Note: `sstat` does not work for completed jobs; use `sacct` for historical data.
 - **`scontrol`**: Administrative command for viewing and modifying cluster configuration. Can show node details, job information, partition configuration, and `slurm.conf` settings.
 
+### sstat usage and limitations
+
+`sstat` provides real-time resource usage statistics for running jobs, but has important limitations.
+
+**Usage** (invoked from login nodes):
+```bash
+# Show resource usage for a running job
+sstat --job=12345
+
+# Show specific fields
+sstat --job=12345 --format=JobID,MaxRSS,MaxVMSize,NTasks
+
+# Show usage for all your running jobs
+sstat --user=$USER
+
+# Show usage for specific job steps
+sstat --job=12345.0,12345.1
+```
+
+**Example output** (from login node):
+```bash
+$ sstat --job=12345 --format=JobID,MaxRSS,MaxVMSize,NTasks,CPUUtil
+       JobID     MaxRSS  MaxVMSize   NTasks   CPUUtil
+------------ ---------- ---------- -------- --------
+12345.0        2048M     4096M          16    95.2%
+12345.1        1024M     2048M           8    87.5%
+```
+
+**Limitations:**
+- **Only works for running jobs**: `sstat` cannot query completed jobs. Once a job finishes, `sstat` returns no data.
+- **Requires job to be running**: The job must be in `RUNNING` state. Jobs in `PENDING`, `COMPLETED`, `FAILED`, or `CANCELLED` states cannot be queried.
+- **Step-level granularity**: Statistics are reported per job step, not per task. Use `--format` to see per-step breakdown.
+- **Real-time data only**: `sstat` shows current resource usage, not historical trends.
+- **No GPU usage monitoring**: `sstat` does not track GPU utilization or memory usage. It only shows CPU and memory statistics. To monitor GPU usage, use vendor tools like `nvidia-smi` (NVIDIA) or `rocm-smi` (AMD) directly on compute nodes, or access the node via `srun --jobid=<JOB_ID> --pty bash` to run monitoring commands.
+
+**Alternatives for completed jobs:**
+- **`sacct`**: Use `sacct` to query resource usage for completed jobs from the accounting database
+- **Example**:
+  ```bash
+  # Query completed job resource usage
+  sacct --job=12345 --format=JobID,MaxRSS,MaxVMSize,Elapsed,State
+  
+  # Query with more detail
+  sacct --job=12345 --format=JobID,JobName,MaxRSS,MaxVMSize,TotalCPU,Elapsed,State
+  
+  # Query GPU allocation (what was allocated, not usage)
+  sacct --job=12345 --format=JobID,AllocTRES,Elapsed,State
+  # AllocTRES shows allocated resources like "cpu=32,mem=64G,gpu=4"
+  ```
+
+**GPU monitoring:**
+- **GPU allocation**: `sacct` can show GPU allocation (via `AllocTRES` field) - what GPUs were allocated to the job, but not actual GPU utilization.
+- **GPU usage/utilization**: Slurm does not track GPU utilization metrics. To monitor GPU usage during job execution, use vendor tools like `nvidia-smi` (NVIDIA) or `rocm-smi` (AMD) directly on compute nodes (access via `srun --jobid=<JOB_ID> --pty bash`).
+
+**When to use each:**
+- **`sstat`**: Monitor resource usage of currently running jobs in real-time
+- **`sacct`**: Query historical resource usage for completed jobs, analyze job performance after completion
+
 ### Logging
 
 Slurm daemons write logs that are critical for debugging and monitoring.

@@ -32,6 +32,24 @@ Reservations transition through states as they are created, activated, and compl
 - **ACTIVE**: Reservation is currently active and blocking resources.
 - **COMPLETE**: Reservation has ended. Nodes return to normal scheduling.
 - **Cancellation**: Administrators can cancel reservations before they start or while active. Cancelled reservations release nodes immediately.
+- **Example: creating reservation** (from controller or login node, admin only):
+  ```bash
+  # Create one-time reservation for specific nodes
+  scontrol create reservation ReservationName=maintenance \
+    StartTime=2024-01-15T10:00:00 EndTime=2024-01-15T14:00:00 \
+    Nodes=gpu-node[01-04] Users=admin
+  
+  # Create standing reservation (weekly)
+  scontrol create reservation ReservationName=weekly-training \
+    StartTime=2024-01-15T09:00:00 EndTime=2024-01-15T17:00:00 \
+    Nodes=gpu-node[05-10] Flags=WEEKLY
+  
+  # Show reservation details
+  scontrol show reservation maintenance
+  
+  # Cancel reservation
+  scontrol delete reservation maintenance
+  ```
 
 ## dstack
 

@@ -15,6 +15,12 @@
 For a job to move from `PENDING` to `RUNNING`, it must meet both **policy** and **resource** constraints.
 
 - **Reason codes**: Jobs can be pending for various reasons. Common reasons include `Priority` (waiting for higher ranked jobs), `Resources` (cluster full), `Dependency` (waiting for another job), or `AssocGrpCPULimit` (user hit a running limit).
+- **Example: checking job status and reason** (from login node):
+  ```bash
+  squeue -j 12345
+  # JOBID PARTITION     NAME     USER ST  TIME  NODES REASON
+  # 12345     gpu    training   user1 PD  0:00      4 Priority
+  ```
 - **Eligibility**: The scheduler evaluates these constraints every cycle. A job is "eligible" only when it satisfies all policies (Time, QOS, Partition limits) and is simply waiting for idle resources.
 
 ### Priority calculation
@@ -25,6 +31,17 @@ Slurm uses the `priority/multifactor` plugin to assign a single integer value to
 - **Age**: Slightly increases priority the longer a job sits in the queue to prevent starvation.
 - **Job size**: Can be tuned to prioritize large jobs (to encourage parallelism) or small jobs (for throughput).
 - **QOS**: A static boost based on Quality of Service (e.g., a "debug" QOS might have high priority).
+- **Example: requesting QOS in job script** (script on login node):
+  ```bash
+  #!/bin/bash
+  #SBATCH --job-name=high-priority
+  #SBATCH --qos=debug  # Request high-priority QOS
+  #SBATCH --nodes=1
+  #SBATCH --gres=gpu:1
+  #SBATCH --time=1:00:00
+  
+  srun python test_model.py
+  ```
 - **Recalculation**: Priorities are dynamic. As a job waits, its "Age" factor grows, potentially moving it up the list.
 
 ### Multi-node & parallel allocation
@@ -66,6 +83,12 @@ Job packing allows multiple jobs to run simultaneously on the same node, sharing
 Heterogeneous jobs allow a single job to request different resource requirements for different components.
 
 - **Component specification**: Use `--het-group` to define job components with different requirements. Submit multiple job specifications separated by `:` where each `--het-group` defines one component with its own resource requirements.
+- **Example: heterogeneous job submission** (from login node):
+  ```bash
+  # Submit heterogeneous job with two components
+  sbatch --het-group=0 --nodes=2 --gres=gpu:1 : \
+         --het-group=1 --nodes=4 --gres=gpu:2 job.sh
+  ```
 - **Allocation**: The scheduler must satisfy all component requirements simultaneously. All components start together and are managed as a single job.
 
 #### Exclusive vs shared access

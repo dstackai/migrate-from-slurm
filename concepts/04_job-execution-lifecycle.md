@@ -4,11 +4,52 @@
 
 ### Job submission and definition
 
-Jobs are submitted using `sbatch` (batch), `srun` (step), or `salloc` (allocation).
+Jobs are submitted using `sbatch` (batch), `srun` (step), or `salloc` (allocation). All three commands are invoked from **login nodes** (user access servers where users SSH to interact with the cluster; see [Control plane, state, and scaling](01_control-plane.md) for details on cluster infrastructure), but they differ in execution model and use cases. Jobs execute on **compute nodes**, not login nodes.
 
-- **sbatch (Batch script)**: The standard for production work. It submits a script file containing `#SBATCH` directives (e.g., `#SBATCH --nodes=2`) to the queue. The script executes on the first allocated node only when resources become available.
-- **srun (Process launcher)**: This is Slurm's parallel process launcher (better than `mpirun`). It launches the actual application tasks across the allocated nodes. It can be used as a standalone command (creates an interactive allocation and runs immediately) or inside an `sbatch` script.
-- **salloc (Interactive allocation)**: Requests resources for an interactive session. **Crucial**: By default, `salloc` grants a shell on the *login node* with environment variables set; it does not automatically SSH you to the compute node. You must run `srun` or `ssh` to reach the allocated resources.
+- **sbatch (Batch script)**: Submits a script file containing `#SBATCH` directives to the queue. The script executes on compute nodes when resources become available. Use for production jobs that don't require interaction.
+- **srun (Process launcher)**: Launches application tasks across allocated nodes. As a standalone command, it blocks until resources are allocated and the command completes. Can also be used inside `sbatch` scripts. Use for quick tests or immediate execution.
+- **salloc (Interactive allocation)**: Allocates resources and returns a shell on the login node with environment variables set. You must use `srun` or `ssh` to access compute nodes. Use for interactive sessions where you need to run multiple commands.
+
+**Examples:**
+
+**sbatch** (from login node):
+```bash
+# Create and submit job script
+cat > train.sh << 'EOF'
+#!/bin/bash
+#SBATCH --job-name=train
+#SBATCH --nodes=2
+#SBATCH --ntasks=16
+#SBATCH --time=2:00:00
+#SBATCH --output=train-%j.out
+
+srun python train.py
+EOF
+
+sbatch train.sh  # Job queued, returns immediately
+```
+
+**srun** (from login node):
+```bash
+# Runs immediately, blocks until completion
+srun --nodes=1 --ntasks=4 --gres=gpu:1 --time=10:00 python test_model.py
+```
+
+**salloc** (from login node):
+```bash
+# Allocates resources, returns shell on login node
+salloc --nodes=1 --ntasks=8 --gres=gpu:2 --time=1:00:00
+
+# Run commands in allocation
+srun hostname  # Executes on compute node
+srun python train.py
+srun python evaluate.py
+
+# Or SSH to allocated node
+ssh $SLURM_NODELIST
+
+exit  # Releases allocation
+```
 
 ### Interactive jobs and sessions
 
@@ -41,7 +82,25 @@ While `slurmctld` manages the cluster, `slurmstepd` is the daemon that manages t
 A single job allocation can contain multiple job steps, each running different commands or applications.
 
 - **Job steps**: Within one allocation, you can run multiple steps sequentially or in parallel. Each step is identified by `SLURM_STEP_ID`. Example: Step 0 might prepare data, Step 1 runs the main computation, Step 2 post-processes results.
-- **Task distribution**: Tasks are distributed across allocated nodes based on the `--ntasks` and `--ntasks-per-node` parameters. Tasks are distributed evenly across nodes according to these specifications.
+- **Allocation vs step resources**: The `#SBATCH` directives define the **allocation** (total resources reserved). Within that allocation, `srun` commands can use all or a subset of those resources. Each `srun` creates a new job step that consumes resources from the allocation.
+- **Step resource specification**: `srun` can override allocation parameters for that specific step. If the allocation has 4 nodes but a step only needs 1 node, specify `srun --nodes=1` to use only 1 node for that step.
+- **Example: multiple steps in one job** (script on login node, all steps execute on compute nodes):
+  ```bash
+  #!/bin/bash
+  #SBATCH --nodes=4          # Allocation: 4 nodes reserved
+  #SBATCH --ntasks=32        # Allocation: 32 tasks available
+  
+  # Step 0: Data preparation (uses 1 node from allocation)
+  srun --ntasks=1 --nodes=1 python prepare_data.py
+  
+  # Step 1: Main computation (uses all 4 nodes from allocation)
+  srun --ntasks=32 --nodes=4 python train.py
+  
+  # Step 2: Post-processing (uses 1 node from allocation)
+  srun --ntasks=1 --nodes=1 python postprocess.py
+  ```
+- **Resource inheritance**: If `srun` doesn't specify resource parameters, it inherits from the allocation. For example, if allocation has `--ntasks=32`, an `srun` without `--ntasks` will use all 32 tasks.
+- **Task distribution**: Tasks are distributed evenly across allocated nodes. If `--ntasks=32` and `--nodes=4`, Slurm distributes 8 tasks per node. Use `--ntasks-per-node` to override this distribution.
 - **MPI integration**: Slurm's `srun` is the recommended MPI launcher (replaces `mpirun`). It sets `SLURM_PROCID` to match MPI rank. Use `srun mpirun` only if your MPI implementation requires it. Slurm handles rank mapping automatically.
 - **OpenMP/threading**: For threaded applications, use `--cpus-per-task` to allocate CPUs per task. CPU binding can be configured to bind threads to specific CPU cores. The `OMP_NUM_THREADS` environment variable should match `--cpus-per-task`.
 - **Task binding**: CPU affinity is controlled by `--cpu-bind` with options to bind to cores, threads, sockets, or no binding.
@@ -55,7 +114,7 @@ A job script is a shell script (typically Bash) that contains both Slurm directi
 - **Script format**: Job scripts start with a shebang line (e.g., `#!/bin/bash`) followed by `#SBATCH` directives, then the actual commands to execute.
 - **Directive placement**: `#SBATCH` directives must appear at the top of the script, before any executable commands. They can be interspersed with comments, but must come before the first non-comment, non-directive line.
 - **Script execution**: When the job starts, the script executes on the first allocated node (the "batch" node). The script runs with the user's permissions and environment.
-- **Example structure**:
+- **Example structure** (script created on login node, executed on compute nodes):
   ```bash
   #!/bin/bash
   #SBATCH --job-name=myjob
@@ -65,17 +124,116 @@ A job script is a shell script (typically Bash) that contains both Slurm directi
   
   # Your commands here
   module load python/3.9
-  srun python my_script.py
+  srun python training_script.py
   ```
+  
+- **Submission** (from login node):
+  ```bash
+  # On login node
+  sbatch myjob.sh
+  # Submitted batch job 12345
+  ```
+
+#### Resource specification fundamentals
+
+Understanding how Slurm allocates resources requires understanding the relationship between nodes, tasks, CPUs, and memory.
+
+**Core concepts:**
+- **Node**: A physical or virtual compute machine in the cluster. Each node has CPUs, memory, and optionally GPUs.
+- **Task**: A process (program instance) that Slurm launches. For MPI jobs, each task is one MPI rank. For multi-threaded jobs, one task may spawn multiple threads.
+- **CPU**: A CPU core (or hardware thread) that can execute instructions. Tasks consume CPUs.
+- **Memory**: RAM allocated to the job, enforced via cgroups.
+
+**Resource specification directives:**
+- **`--nodes=N`**: Requests N compute nodes. The job will run on exactly N nodes (or fail if not available).
+- **`--ntasks=M`**: Requests M tasks (processes) total across all allocated nodes. Tasks are distributed evenly across nodes unless `--ntasks-per-node` is specified.
+- **`--cpus-per-task=C`**: Allocates C CPUs per task. If you request 32 tasks with 4 CPUs each, you need 128 CPUs total.
+- **`--mem=M`**: Requests M memory per node (e.g., `--mem=16G` requests 16GB per node). Alternative: `--mem-per-cpu=M` requests memory per CPU.
+
+**How they interact:**
+- **Total CPUs needed**: If `--cpus-per-task` is specified, Total CPUs = `--ntasks` × `--cpus-per-task`. If `--cpus-per-task` is not specified, each task gets 1 CPU by default, so Total CPUs = `--ntasks`.
+- **CPUs per node** = Total CPUs ÷ `--nodes` (must not exceed node capacity)
+- **Memory per node** = `--mem` value (or `--mem-per-cpu` × CPUs per node)
+
+**What `--nodes=2 --ntasks=16` means in HPC/AI/GPU context:**
+
+This creates a **distributed parallel job** across 2 compute nodes with 16 processes total (8 per node).
+
+- **MPI context**: 16 MPI ranks total. Rank 0-7 on node 1, ranks 8-15 on node 2. The MPI communicator spans both nodes, enabling inter-node communication.
+- **Distributed ML training**: 16 training processes (e.g., PyTorch DDP, Horovod). Processes on the same node can use shared memory; inter-node communication uses the network.
+- **GPU context**: If `--gres=gpu:4` is specified, each node gets 4 GPUs. Slurm sets `CUDA_VISIBLE_DEVICES` so processes only see allocated GPUs. The application framework (PyTorch DDP, etc.) handles process-to-GPU mapping.
+
+**Example: Distributed training with `--nodes=2 --ntasks=16`** (script on login node, executes on compute nodes):
+```bash
+#!/bin/bash
+#SBATCH --nodes=2          # 2 compute nodes
+#SBATCH --ntasks=16        # 16 training processes (8 per node)
+#SBATCH --gres=gpu:4       # 4 GPUs per node (8 GPUs total)
+#SBATCH --cpus-per-task=4  # 4 CPUs per process
+
+# This creates:
+# - Node 1: 8 processes, 4 GPUs, 32 CPUs
+# - Node 2: 8 processes, 4 GPUs, 32 CPUs
+# - Total: 16 processes, 8 GPUs, 64 CPUs
+# Slurm allocates 4 GPUs per node, sets CUDA_VISIBLE_DEVICES
+# Application framework handles process-to-GPU mapping
+
+srun python distributed_train.py
+```
+
+**Example: MPI job** (script on login node, executes on compute nodes):
+```bash
+#!/bin/bash
+#SBATCH --nodes=4          # 4 nodes
+#SBATCH --ntasks=32        # 32 MPI processes (ranks) total, 8 per node
+#SBATCH --cpus-per-task=2  # 2 CPUs per process
+#SBATCH --mem=8G           # 8GB RAM per node
+
+# 32 MPI ranks total, 8 per node
+# MPI_COMM_WORLD spans all 4 nodes
+
+srun python mpi_program.py
+```
+
+**Example: threaded job** (script on login node, executes on compute nodes):
+```bash
+#!/bin/bash
+#SBATCH --nodes=1           # 1 node
+#SBATCH --ntasks=1          # 1 task (one process)
+#SBATCH --cpus-per-task=16  # 16 CPUs for that process
+#SBATCH --mem=32G           # 32GB RAM
+
+export OMP_NUM_THREADS=16
+srun python threaded_program.py
+```
+
+**Common patterns:**
+- **MPI jobs**: `--nodes=4 --ntasks=32` (32 processes across 4 nodes, 8 per node)
+- **Threaded jobs**: `--nodes=1 --ntasks=1 --cpus-per-task=16` (1 process, 16 threads)
+- **Hybrid MPI+OpenMP**: `--nodes=4 --ntasks=8 --cpus-per-task=4` (8 MPI processes, each with 4 threads = 32 total threads)
+- **Single-node multi-core**: `--nodes=1 --ntasks=8` (8 processes on 1 node)
+
+**Location context**: These directives are specified in job scripts created on login nodes. Slurm interprets them during job submission and allocates resources on compute nodes accordingly.
 
 #### #SBATCH directives
 
 Job scripts use `#SBATCH` directives to specify resource requirements and job options.
 
 - **Common directives**: `--nodes`, `--ntasks`, `--cpus-per-task`, `--mem`, `--time`, `--partition`, `--job-name`, `--output`, `--error`.
-- **Resource specification**: `--nodes=4` requests 4 nodes, `--ntasks=32` requests 32 tasks, `--cpus-per-task=4` requests 4 CPUs per task.
+- **Resource specification**: See "Resource specification fundamentals" above for detailed explanation of how `--nodes`, `--ntasks`, `--cpus-per-task`, and `--mem` interact.
 - **Time limits**: `--time=2:00:00` sets a 2-hour walltime limit. Use `--time-min` for minimum time guarantees.
 - **Output control**: `--output=job-%j.out` sets stdout filename, `--error=job-%j.err` sets stderr filename. Use `%j` for job ID, `%A` for array job ID, `%a` for array task ID.
+- **Example with output files** (script on login node, output files written to submission directory on shared filesystem):
+  ```bash
+  #!/bin/bash
+  #SBATCH --job-name=training
+  #SBATCH --nodes=4
+  #SBATCH --ntasks=32
+  #SBATCH --output=/home/user/jobs/train-%j.out
+  #SBATCH --error=/home/user/jobs/train-%j.err
+  
+  srun python train.py
+  ```
 
 #### Slurm environment variables
 

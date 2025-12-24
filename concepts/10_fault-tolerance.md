@@ -15,6 +15,15 @@ In a Slurm environment, jobs generally fail in one of two ways, requiring differ
 Slurm can automatically restart a job if the hardware fails, but this behavior must be requested.
 
 - **Requeueing**: By default, if a node crashes, the job fails. If requeueing is enabled (via job submission or admin configuration), Slurm puts the job back into `PENDING` state to run again on a healthy node.
+- **Example: enabling requeue** (script on login node):
+  ```bash
+  #!/bin/bash
+  #SBATCH --job-name=requeue-job
+  #SBATCH --nodes=4
+  #SBATCH --requeue  # Enable automatic requeue on node failure
+  
+  srun python train.py
+  ```
 - **Distributed (MPI) behavior**: In a multi-node job, if *one* node fails, the entire job allocation is usually killed. If requeueing is active, the entire parallel job restarts from scratch on a new set of nodes.
 
 ### Preemption & grace periods
@@ -31,6 +40,19 @@ Slurm does not inherently save the memory state of a job (no "system hibernation
 
 - **Application support**: The user's code (or ML framework like PyTorch/TensorFlow) must support saving state to disk periodically.
 - **Signaling**: Users can instruct Slurm to send a specific signal to the application *before* the time limit expires or during preemption. The application catches this signal, writes a checkpoint file, and exits cleanly.
+- **Example: checkpoint signal handling** (script on login node, executes on compute nodes):
+  ```bash
+  #!/bin/bash
+  #SBATCH --job-name=checkpoint-job
+  #SBATCH --nodes=1
+  #SBATCH --time=2:00:00
+  #SBATCH --signal=B:USR1@60  # Send USR1 signal 60 seconds before time limit
+  
+  # Trap signal for checkpointing
+  trap 'echo "Checkpointing..."; python save_checkpoint.py' USR1
+  
+  srun python long_training.py
+  ```
 
 ### Distributed job recovery (MPI)
 

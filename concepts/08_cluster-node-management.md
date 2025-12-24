@@ -7,7 +7,26 @@
 Nodes act as the reusable vessels for jobs. Slurm tracks their state to ensure scheduling integrity.
 
 - **Standard states**: Common states include `IDLE` (Empty), `ALLOCATED` (Busy), `MIXED` (Some cores busy), and `DOWN` (Offline).
+- **Example: checking node states** (from login node):
+  ```bash
+  # Show all nodes and their states
+  sinfo
+  # PARTITION AVAIL  TIMELIMIT  NODES  STATE NODELIST
+  # gpu          up   infinite      4  idle gpu-node[01-04]
+  # cpu          up   infinite      2 alloc cpu-node[01-02]
+  
+  # Show detailed node information
+  scontrol show node gpu-node01
+  ```
 - **DRAIN state**: The administrative state used for maintenance. A draining node allows currently running jobs to finish but refuses new allocations.
+- **Example: draining a node** (from controller or login node, admin only):
+  ```bash
+  # Drain node for maintenance
+  scontrol update NodeName=gpu-node01 State=DRAIN Reason="Maintenance"
+  
+  # Undrain node after maintenance
+  scontrol update NodeName=gpu-node01 State=RESUME
+  ```
 - **FAIL state**: Set automatically when a health check detects a hardware fault, removing the node from the pool.
 - **FUTURE state**: Used in large clusters. The node is defined in the config but hasn't "joined" yet, keeping database overhead low until the node actually boots.
 - **Lifecycle flow**: Nodes typically cycle from `IDLE` → `ALLOCATED` (Job Starts) → `IDLE` (Job Ends). `slurmd` generally does *not* reboot nodes between jobs unless explicitly configured.
@@ -18,6 +37,33 @@ In large clusters, reactive failure handling (waiting for a node to crash) is in
 
 - **Heartbeats**: `slurmctld` expects a "ping" from every node every few seconds (`SlurmdTimeout`). If missed, the node is marked `DOWN`, and jobs are requeued (if `--requeue` is set).
 - **Proactive health checks (NHC)**: Large clusters configure the `HealthCheckProgram` parameter in `slurm.conf` to specify a script that runs periodically to detect soft failures.
+- **Example: health check script configuration** (in `slurm.conf` on controller node):
+  ```bash
+  # Health check script located on shared filesystem
+  HealthCheckProgram=/shared/scripts/health_check.sh
+  HealthCheckInterval=300  # Run every 5 minutes
+  ```
+- **Example: health check script** (located on shared filesystem, executed on compute nodes):
+  ```bash
+  #!/bin/bash
+  # Health check script on compute node
+  # Checks disk space, memory, GPU health
+  
+  # Check disk space
+  if [ $(df /tmp | tail -1 | awk '{print $5}' | sed 's/%//') -gt 90 ]; then
+      echo "Disk space critical" >&2
+      exit 1
+  fi
+  
+  # Check GPU (if node has GPUs)
+  if command -v nvidia-smi &> /dev/null; then
+      nvidia-smi --query-gpu=health.status --format=csv,noheader | grep -q "Healthy"
+      if [ $? -ne 0 ]; then
+          echo "GPU health check failed" >&2
+          exit 1
+      fi
+  fi
+  ```
 - **Soft failure detection**: The script checks for non-fatal issues that could affect job execution.
 - **Automated action**: If the script returns an error, Slurm automatically moves the node to `DRAIN`. This prevents *new* jobs from starting on bad hardware while allowing running jobs to finish.
 
@@ -35,6 +81,11 @@ Keeping `slurm.conf` synchronized across 4,000 nodes is a major operational chal
 - **Synchronization rule**: `slurmd` (compute) and `slurmctld` (controller) must agree on the cluster configuration. Mismatches lead to "split-brain" scheduling behavior.
 - **Configless Slurm**: The modern standard for large clusters.
 - **Mechanism**: Compute nodes do *not* store a local `slurm.conf`. On startup, they connect to the controller, download the configuration into memory, and start. This ensures 100% consistency with zero manual file copying.
+- **Example: enabling configless mode** (in `slurm.conf` on controller node):
+  ```bash
+  # Enable configless mode
+  SlurmdParameters=configless
+  ```
 
 ### Upgrade constraints
 

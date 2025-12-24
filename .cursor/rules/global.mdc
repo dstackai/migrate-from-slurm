@@ -46,6 +46,14 @@ alwaysApply: true
 - Explain technical implications of architectural differences (e.g., latency, state management) without value judgments.
 - Include side-by-side examples (commands, scripts, or configs) only when essential to ground an abstract concept in reality.
 
+## Level of detail
+- Do not change the level of detail significantly by going into excessive detail, especially if it doesn't make the entire picture significantly better.
+- Exceptions: Include vital details that are essential for understanding the mechanics or making informed decisions.
+- Remember the purpose is to explain mechanics, not implementation details.
+- Pay attention to essential/main script, config, and command examples that demonstrate core concepts.
+- Be aggressive about moving concepts that are not primarily HPC/AI-related to `out-of-scope.md`.
+- When in doubt about whether a topic belongs in scope, ask: "Is this essential for a Slurm user/admin to understand how to use dstack for HPC/AI workloads?" If not, move it to out-of-scope.
+
 ## Response verification
 - Append a list of specific sources used to generate the answer at the end of the response for sanity checking.
 - Explicitly mention specific dstack code files (e.g., `processing_*.py`), dstack documentation files, or Slurm documentation URLs referenced.

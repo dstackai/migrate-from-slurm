@@ -10,6 +10,33 @@ In Slurm, a **Partition** is the mechanism used to group nodes and jobs. It func
 - **Node-Partition mapping**: A single partition can contain one node, all nodes, or a specific subset.
 - **Overlapping partitions**: A single compute node can belong to multiple partitions simultaneously. A node might be in the `gpu` partition (for long jobs) and the `debug` partition (for short, high-priority tests) at the same time.
 - **Default partition**: One partition must be designated as the default. If a user submits a job without specifying a partition, it lands here automatically.
+- **Example: partition configuration** (in `slurm.conf` on controller node):
+  ```bash
+  # GPU partition
+  PartitionName=gpu Nodes=gpu-node[01-10] Default=NO MaxTime=24:00:00
+  
+  # CPU partition (default)
+  PartitionName=cpu Nodes=cpu-node[01-50] Default=YES MaxTime=72:00:00
+  
+  # Debug partition (overlaps with gpu partition)
+  PartitionName=debug Nodes=gpu-node[01-10] Default=NO MaxTime=1:00:00
+  ```
+- **Example: submitting to partition** (from login node):
+  ```bash
+  # Submit to GPU partition
+  sbatch --partition=gpu gpu_job.sh
+  
+  # Or in job script
+  #SBATCH --partition=gpu
+  ```
+- **Example: checking partition status** (from login node):
+  ```bash
+  # Show partition information
+  sinfo
+  # PARTITION AVAIL  TIMELIMIT  NODES  STATE NODELIST
+  # gpu          up 1-00:00:00     10   idle gpu-node[01-10]
+  # cpu          up 3-00:00:00     50   idle cpu-node[01-50]
+  ```
 
 ### Partition design patterns
 

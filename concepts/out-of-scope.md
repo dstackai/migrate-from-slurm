@@ -32,11 +32,11 @@ This document lists topics that are not covered in the current concept guides. T
 
 ### Cloud and hybrid deployments
 
-- **Cloud bursting**: Detailed cloud integration mechanics, cloud API configuration (AWS, Azure, GCP)
-- **Hybrid clusters**: Mixing on-premise and cloud nodes, managing heterogeneous infrastructure
-- **Auto-scaling**: Dynamic node provisioning in cloud environments, scaling policies and triggers
+- **Hybrid clusters**: Mixing on-premise and cloud nodes in a single cluster, managing heterogeneous infrastructure across environments, cross-cloud deployments (managing nodes across multiple cloud providers simultaneously)
+- **Cloud API specifics**: Detailed cloud API configuration and authentication for specific providers (AWS, Azure, GCP, neo-clouds), provider-specific instance types and pricing models
+- **Network connectivity for hybrid**: VPN configuration, firewall rules, MUNGE key distribution across network boundaries for hybrid deployments
 
-**Note**: Basic power saving and elastic scaling concepts are covered in guide 8, but detailed cloud-specific implementations are not.
+**Note**: Basic dynamic provisioning mechanisms (Resume/Suspend programs) are covered in guide 16, but hybrid cluster architectures and provider-specific API details are operational topics.
 
 ### Advanced operational topics
 

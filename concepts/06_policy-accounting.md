@@ -27,6 +27,27 @@ The `slurmdbd` daemon acts as the secure interface between the compute cluster a
 - **Data flow**: `slurmctld` caches usage data in RAM and asynchronously sends it to `slurmdbd`. If the database goes down, the cluster can typically continue scheduling for a short time (if configured), but limits cannot be updated.
 - **The `sacct` command**: This is the user interface for history.
     - **Performance warning**: On large clusters, running `sacct` without a start time (`-S`) or specific job ID queries the entire table scan. This can lock the database. Users should always filter by time or job ID.
+- **Example: querying job history** (from login node):
+  ```bash
+  # Query specific job
+  sacct --job=12345
+  
+  # Query with time filter (required for large clusters)
+  sacct --starttime=2024-01-01 --endtime=2024-01-02
+  
+  # Query with specific fields
+  sacct --job=12345 --format=JobID,JobName,State,ExitCode,Elapsed,MaxRSS
+  ```
+- **Example: requesting account in job script** (script on login node):
+  ```bash
+  #!/bin/bash
+  #SBATCH --account=research-group
+  #SBATCH --job-name=training
+  #SBATCH --nodes=1
+  #SBATCH --gres=gpu:1
+  
+  srun python train.py
+  ```
 
 ## dstack
 
