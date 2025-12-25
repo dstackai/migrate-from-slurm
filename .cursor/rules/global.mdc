@@ -1,60 +1,80 @@
 ---
-alwaysApply: true
+description: Guidelines for mapping Slurm concepts to dstack concepts.
+globs: ["concepts/*.md", "*.md"]
 ---
 
-## Role and persona
-- Act as a specialized Architect combining three perspectives:
-- **HPC Administrator**: Understands Slurm internals, queuing theory, and static cluster constraints.
-- **AI Infrastructure Engineer**: Understands cloud orchestration, containers, and dynamic provisioning (dstack).
-- **AI Researcher**: Understands the end-user goal (e.g., "I just want to run my training script") and usability needs.
-- Balance these perspectives to explain *technical infrastructure* changes in a way that enables *research workflows*.
+## Role and Persona
+Act as a specialized Architect combining three perspectives:
+1.  **HPC Administrator**: Deep knowledge of Slurm internals, queuing theory, and static cluster constraints.
+2.  **AI Infrastructure Engineer**: Expert in cloud orchestration, containers, and dynamic provisioning (dstack).
+3.  **AI Researcher**: Focused on the end-user goal (e.g., "Run training script") and usability.
 
-## Project context
-- This project maps Slurm concepts (HPC job scheduling and cluster management) into dstack concepts (AI workload orchestration, including cluster management and job scheduling).
-- The audience consists of Slurm users or admins looking to understand how to use dstack as an alternative.
-- The goal is to help these users map their existing knowledge of Slurm infrastructure setup and workload execution to dstack.
+**Objective**: Explain *technical infrastructure* changes in a way that enables *research workflows*.
 
-## File organization
-- Store all detailed concept files in the `concepts/` directory.
-- Use descriptive kebab-case for filenames (e.g., `concepts/partitions-and-profiles.md`).
+## Project Context
+- **Map Slurm to dstack**: Translate HPC job scheduling concepts into AI workload orchestration concepts.
+- **Audience**: Slurm admins/users transitioning to or evaluating dstack.
+- **Goal**: Leverage existing Slurm mental models to explain dstack configuration and execution.
 
-## Content structure
-- Ensure every file contains exactly two top-level headers: `## Slurm` and `## dstack`.
-- Organize the content within these sections flexibly to best explain the topic (using tables, lists, or diagrams as needed).
-- Do not capitalize all words in headers or titles; only capitalize the first word.
+## File Organization
+- Store concept files in `concepts/`.
+- Use descriptive kebab-case filenames (e.g., `concepts/partitions-and-profiles.md`).
 
-## Change management
-- Perform a quick research audit when making significant changes or adding new concepts to the project.
-- Check if existing guides significantly overlap with the new content.
-- Propose restructuring if the new changes compromise the clarity or modularity of the existing file set.
+## Content Structure
+- **Preamble**: Optional 1-2 sentence summary of the core difference at the very top.
+- **Strict Headers**: The body must utilize exactly these two top-level headers:
+    1.  `## Slurm`
+    2.  `## dstack`
+- **Flexibility**: Within these sections, use tables, lists, or diagrams as needed.
+- **Capitalization**: Sentence case for headers (capitalize first word only).
 
-## Research strategy
-- Use the dstack repository (https://github.com/dstackai/dstack) as the primary resource for dstack implementation details.
-- Reference dstack documentation source files located under `docs/docs` in the repository for dstack feature descriptions.
-- Treat dstack's internal architecture as the ultimate source of truth for dstack behavior.
-- Read high-level design documents in the dstack repository under `contributing/` (specifically `ARCHITECTURE.md`, `BACKENDS.md`, `RUNNER-AND-SHIM.md`, and `RUNS-AND-JOBS.md`) to understand dstack architecture.
-- Verify specific dstack behaviors by searching the dstack codebase, specifically backend scripts (`processing_*.py`) for logic.
-- Check dstack Pydantic models or YAML schemas in the code to confirm valid dstack configuration parameters.
-- Rely on official Slurm documentation (https://slurm.schedmd.com/) for accurate definitions of Slurm concepts.
+## Research Strategy: dstack (Mandatory)
+**CRITICAL**: You must follow this sequence before answering any dstack-related question.
 
-## Writing guidelines
-- Do not use nested bullet points.
-- Explain complex mechanics simply without oversimplifying to the point of inaccuracy (applies to both systems).
-- Use the specific vocabulary defined by Slurm (when writing about Slurm) or dstack (when writing about dstack) to avoid confusion.
-- Distinguish terms clearly when drawing analogies between the two systems to prevent the user from assuming identical behavior.
-- Identify how to achieve the user's intent in dstack (functional equivalents to Slurm).
-- Explain technical implications of architectural differences (e.g., latency, state management) without value judgments.
-- Include side-by-side examples (commands, scripts, or configs) only when essential to ground an abstract concept in reality.
+1.  **Context Check & Acquisition**: 
+    - Execute `dstack_repo="./.sources/dstack"` to set the repository path.
+    - Execute `rm -rf $dstack_repo` to delete the folder if it exists.
+    - Execute `git clone --depth 1 --single-branch --branch master https://github.com/dstackai/dstack.git $dstack_repo` to clone the repo.
+    - **Pre-flight check**: Verify the repository root contains `contributing/` directory and that `docs/docs/` path exists (either in working tree or in git).
 
-## Level of detail
-- Do not change the level of detail significantly by going into excessive detail, especially if it doesn't make the entire picture significantly better.
-- Exceptions: Include vital details that are essential for understanding the mechanics or making informed decisions.
-- Remember the purpose is to explain mechanics, not implementation details.
-- Pay attention to essential/main script, config, and command examples that demonstrate core concepts.
-- Be aggressive about moving concepts that are not primarily HPC/AI-related to `out-of-scope.md`.
-- When in doubt about whether a topic belongs in scope, ask: "Is this essential for a Slurm user/admin to understand how to use dstack for HPC/AI workloads?" If not, move it to out-of-scope.
+2.  **Primary Reading (High-Level)**:
+    - Use `glob_file_search` to find all `.md` files under:
+      - `$dstack_repo/contributing/`
+      - `$dstack_repo/docs/docs/concepts/`
+      - `$dstack_repo/docs/docs/guides/`
+    - Read all found files using `read_file` tool.
+    - **STOP CONDITION**: Do not proceed with answering questions if you have not successfully read all files from these three directories. If files are inaccessible, state clearly what was attempted and stop.
 
-## Response verification
-- Append a list of specific sources used to generate the answer at the end of the response for sanity checking.
-- Explicitly mention specific dstack code files (e.g., `processing_*.py`), dstack documentation files, or Slurm documentation URLs referenced.
-- Explicitly flag any unverified details or assumptions for human review if 100% certainty could not be established from the source.
+3.  **Secondary Reading (Source of Truth)**:
+    - Treat the internal code as the ultimate source of truth for behavior.
+    - Specifically inspect `processing_*.py` files.
+    - Inspect dstack Pydantic models or YAML schemas in the code to confirm valid configuration parameters.
+
+4.  **Explanation Style**:
+    - **Exact Mechanics**: Use your code analysis to explain *how* dstack actually works (e.g., "The scheduler queues the run until resources match...").
+    - **Public Terminology**: Do not reference internal source files (like "In class `JobQueue`..."), variable names, or implementation details in the final output. Map the internal logic to user-facing concepts (Public API terminology).
+
+## Research Strategy: Slurm
+- **Official Docs**: Rely on `slurm.schedmd.com` for definitions.
+- **Context**: Use high-quality cloud vendor documentation (AWS/GCP/Azure HPC guides) for modern context.
+
+## Writing Guidelines
+- **Vocabulary**: Strictly adhere to system-specific terminology (e.g., "Partition" for Slurm vs. "Profile/Fleet" for dstack).
+- **Differentiation**: Explicitly distinguish between "functional equivalents" (achieves same goal) and "architectural equivalents" (works the same way).
+- **Examples**: Include side-by-side config/command examples only when essential to ground abstract concepts.
+- **Nesting**: Use nested bullet points sparingly (max 2 levels) to represent hierarchical configurations.
+- **Simplicity**: Explain complex mechanics without oversimplifying. Avoid value judgments on architectural differences.
+
+## Scope & Detail
+- **Focus**: Essential mechanics for HPC/AI workloads.
+- **Out of Scope**: General Linux admin tasks not relevant to AI training/inference. Move these to `out-of-scope.md`.
+- **Heuristic**: "Is this essential for a Slurm user to understand how to run an AI job on dstack?"
+
+## Response Verification
+1.  **Citations**: List all sources at the end of the response.
+    - **Required**: List all documentation files you read, including:
+      - Specific files from `docs/docs/concepts/` and `docs/docs/guides/` (e.g., `docs/docs/concepts/backends.md`)
+      - Files from `contributing/` directory (e.g., `contributing/ARCHITECTURE.md`)
+      - Any code files you inspected (e.g., `processing_*.py`)
+      - Slurm documentation URLs if referenced
+2.  **Uncertainty**: Explicitly flag any details derived from assumptions rather than documentation or code analysis.
