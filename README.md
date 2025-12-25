@@ -6,8 +6,8 @@ This repo documents key Slurm's concepts and how they map to `dstack`'s equvival
 
 We welcome feedback on the Slurm documentation and mappings. You can contribute in the following ways:
 
-- **Create an issue**: Open a [GitHub issue](https://github.com/dstackai/dstack/issues) to report errors, suggest improvements, or ask questions about the documentation
-- **Submit a PR**: Submit a [pull request](https://github.com/dstackai/dstack/pulls) with corrections, additions, or improvements to the documentation
+- **Create an issue**: Open a [GitHub issue](https://github.com/dstackai/migrate-from-slurm/issues) to report errors, suggest improvements, or ask questions about the documentation
+- **Submit a PR**: Submit a [pull request](https://github.com/dstackai/migrate-from-slurm/pulls) with corrections, additions, or improvements to the documentation
 - **Contact directly**: Reach out to [@peterschmidt85](https://github.com/peterschmidt85) on GitHub for direct feedback or questions
 
 ## Work in progress
