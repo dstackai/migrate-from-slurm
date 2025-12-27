@@ -132,6 +132,66 @@ A run is the primary unit of workload in dstack (similar to a Slurm job). A run 
 - **Job states**: Jobs have states: `SUBMITTED`, `PROVISIONING`, `PULLING` (Docker image being pulled), `RUNNING`, `TERMINATING`, and terminal states `DONE`, `FAILED`, `TERMINATED`, or `ABORTED`.
 - **Run states**: A run's state is an aggregate of its jobs' states. For example, a run becomes `RUNNING` when any job enters `RUNNING`, and `PROVISIONING` when any job is `PROVISIONING` or `PULLING`.
 - **Distributed tasks**: For distributed tasks, all jobs must be provisioned before execution begins. Each job is scheduled independently, but the run waits for all instances to be ready before starting any job.
+- **Startup order and stop criteria**: By default, all nodes start simultaneously. For MPI workloads, set `startup_order: workers-first` to start worker nodes before the master, and `stop_criteria: master-done` to stop workers when the master completes.
+- **Example: distributed task** (`.dstack.yml`):
+  ```yaml
+  type: task
+  name: train-distrib
+  
+  nodes: 4
+  
+  repos:
+    - .
+  
+  python: 3.12
+  env:
+    - NCCL_DEBUG=INFO
+  commands:
+    - |
+      torchrun \
+        --nproc-per-node=$DSTACK_GPUS_PER_NODE \
+        --node-rank=$DSTACK_NODE_RANK \
+        --nnodes=$DSTACK_NODES_NUM \
+        --master-addr=$DSTACK_MASTER_NODE_IP \
+        --master-port=12345 \
+        train.py
+  
+  resources:
+    gpu: H100:1
+    shm_size: 24GB
+  ```
+- **Example: distributed task with MPI** (`.dstack.yml`):
+  ```yaml
+  type: task
+  name: nccl-tests
+  
+  nodes: 2
+  startup_order: workers-first
+  stop_criteria: master-done
+  
+  env:
+    - NCCL_DEBUG=INFO
+  commands:
+    - |
+      if [ $DSTACK_NODE_RANK -eq 0 ]; then
+        mpirun \
+          --allow-run-as-root \
+          --hostfile $DSTACK_MPI_HOSTFILE \
+          -n $DSTACK_GPUS_NUM \
+          -N $DSTACK_GPUS_PER_NODE \
+          --bind-to none \
+          /opt/nccl-tests/build/all_reduce_perf -b 8 -e 8G -f 2 -g 1
+      else
+        sleep infinity
+      fi
+  
+  resources:
+    gpu: nvidia:1..8
+    shm_size: 16GB
+  ```
+  For MPI workloads, `startup_order: workers-first` ensures worker nodes are ready before the master starts, and `stop_criteria: master-done` stops workers when the master completes. The `DSTACK_MPI_HOSTFILE` environment variable provides a pre-populated MPI hostfile.
+
+For details on fleets with cluster placement and cluster provisioning, see the [cluster node management](08_cluster-node-management.md) guide.
 
 > Note: The detailed job execution lifecycle, including state transitions and provisioning mechanics, is covered in the [job execution lifecycle](04_job-execution-lifecycle.md) guide.
 
@@ -176,7 +236,7 @@ By default, dstack does not retry failed jobs or runs. If a job fails to provisi
 You can monitor queued and running jobs using the dstack CLI or the web dashboard.
 
 - **List runs**: Use `dstack ps` to view all runs and their current status, including queued (`SUBMITTED` or `PROVISIONING`) and running jobs. The output shows run names, backends, resources, prices, and status.
-- **Queue position and waiting reasons**: Unlike Slurm's `squeue` which shows queue position and reason codes, dstack doesn't display explicit queue position or detailed waiting reasons. The status (`SUBMITTED`, `PROVISIONING`) indicates the current state but not the specific reason for waiting.
+- **Queue position and waiting reasons**: Unlike Slurm's `squeue` which shows queue position and reason codes, dstack doesn't display explicit queue position or detailed waiting reasons. The status (`SUBMITTED`, `PROVISIONING`) indicates the current state but not the specific reason for waiting. Scheduled tasks show `PENDING` status while waiting for their scheduled time.
 - **Verbose output**: Use `dstack ps --verbose` (or `-v`) to see additional details such as inactivity duration for dev environments.
 - **UI dashboard**: The dstack UI dashboard provides a visual view of all runs, their status, and resource usage.
 
@@ -184,7 +244,7 @@ You can monitor queued and running jobs using the dstack CLI or the web dashboar
 
 Tasks can be scheduled to run periodically using cron syntax.
 
-- **Scheduled tasks**: Specify `schedule` with a cron expression to start a task periodically at specific UTC times. The scheduler automatically submits runs according to the schedule.
+- **Scheduled tasks**: Specify `schedule` with a cron expression to start a task periodically at specific UTC times. The scheduler automatically submits runs according to the schedule. Scheduled tasks show `PENDING` status while waiting for their scheduled time.
 - **Example: scheduled task** (`.dstack.yml`):
   ```yaml
   type: task
