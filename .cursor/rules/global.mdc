@@ -42,6 +42,7 @@ Act as a specialized Architect combining three perspectives:
       - `$dstack_repo/contributing/`
       - `$dstack_repo/docs/docs/concepts/`
       - `$dstack_repo/docs/docs/guides/`
+      - `$dstack_repo/examples/`
     - Read all found files using `read_file` tool.
     - **STOP CONDITION**: Do not proceed with answering questions if you have not successfully read all files from these three directories. If files are inaccessible, state clearly what was attempted and stop.
 
@@ -73,7 +74,7 @@ Act as a specialized Architect combining three perspectives:
 ## Response Verification
 1.  **Citations**: List all sources at the end of the response.
     - **Required**: List all documentation files you read, including:
-      - Specific files from `docs/docs/concepts/` and `docs/docs/guides/` (e.g., `docs/docs/concepts/backends.md`)
+      - Specific files from `docs/docs/concepts/`, `docs/docs/guides/` (e.g., `docs/docs/concepts/backends.md`), and `examples/`.
       - Files from `contributing/` directory (e.g., `contributing/ARCHITECTURE.md`)
       - Any code files you inspected (e.g., `processing_*.py`)
       - Slurm documentation URLs if referenced

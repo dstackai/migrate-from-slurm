@@ -273,4 +273,202 @@ Slurm captures job output and provides mechanisms for log management and notific
 
 ## dstack
 
-TBA
+### Run submission and definition
+
+A **run** is the primary unit of workload in dstack, analogous to a Slurm job. A run can spawn one or multiple **jobs**, depending on the configuration. For distributed tasks with multiple nodes, each node gets its own job. Each job runs on a single instance. Runs are created from run configurations defined in YAML files (ending with `.dstack.yml`). There are three types of run configurations:
+
+1. **`dev-environment`**: Provisions an instance and provides access via a desktop IDE (typically VS Code). The instance remains running until explicitly stopped, allowing interactive development and debugging.
+2. **`task`**: Executes a bash script or series of commands until completion. Tasks are batch-oriented and terminate when the commands finish, similar to Slurm batch jobs.
+3. **`service`**: Runs a long-lived application that exposes a port for inference or web services. Services are out of scope for this guide, as they implement inference workloads that Slurm does not handle.
+
+**Submission methods**: While runs can be submitted via the API, the primary method is using `dstack apply` with a configuration file. The command reads the YAML configuration, provisions resources, and starts the run. By default, `dstack apply` attaches the CLI to the run, which enables port forwarding if the task defines ports. You can also attach the CLI to a running run later using `dstack attach <run-name>`.
+
+**Port forwarding**: Tasks can define ports in their configuration. When ports are specified, `dstack apply` (or `dstack attach`) automatically forwards these ports from the remote instance to your local machine, enabling secure access to applications running on those ports.
+
+**Examples:**
+
+**Dev environment** (interactive development):
+```yaml
+type: dev-environment
+name: vscode
+
+python: 3.12
+ide: vscode
+
+resources:
+  gpu: 24GB
+```
+
+**Task** (single-node batch job):
+```yaml
+type: task
+name: train
+
+python: 3.12
+commands:
+  - uv pip install -r requirements.txt
+  - python train.py
+
+resources:
+  gpu: H100:1
+```
+
+**Task with port forwarding** (web application):
+```yaml
+type: task
+name: streamlit-app
+
+python: 3.12
+commands:
+  - uv pip install streamlit
+  - streamlit hello
+
+ports:
+  - 8501
+
+resources:
+  gpu: 24GB
+```
+
+When running this task, `dstack apply` forwards port `8501` from the remote instance to `localhost:8501`, allowing you to access the Streamlit application from your local machine.
+
+**Distributed task** (multi-node batch job):
+```yaml
+type: task
+name: train-distrib
+
+nodes: 2
+
+python: 3.12
+env:
+  - NCCL_DEBUG=INFO
+commands:
+  - git clone https://github.com/pytorch/examples.git pytorch-examples
+  - cd pytorch-examples/distributed/ddp-tutorial-series
+  - uv pip install -r requirements.txt
+  - |
+    torchrun \
+      --nproc-per-node=$DSTACK_GPUS_PER_NODE \
+      --node-rank=$DSTACK_NODE_RANK \
+      --nnodes=$DSTACK_NODES_NUM \
+      --master-addr=$DSTACK_MASTER_NODE_IP \
+      --master-port=12345 \
+      multinode.py 50 10
+
+resources:
+  gpu: 24GB:1..2
+  shm_size: 24GB
+```
+
+!!! info "Fleet requirement for distributed tasks"
+    Distributed tasks require a fleet with `placement: cluster` configured. This ensures instances are provisioned with optimal inter-node connectivity (e.g., InfiniBand, EFA, GPUDirect) for distributed workloads. See [Fleet-based instance provisioning](#fleet-based-instance-provisioning) below and [Cluster node management](08_cluster-node-management.md) for details on creating and configuring fleets.
+
+**Job startup and termination order**: For distributed tasks, the `startup_order` property controls when jobs start. With `workers-first`, worker nodes start before the master node. The `stop_criteria` property controls when jobs terminate. With `master-done`, worker jobs terminate when the master job completes, even if they are still running (e.g., waiting in `sleep infinity`). See [MPI example](#mpi-example-with-startup-order-and-stop-criteria) in the appendix for a complete example using these properties.
+
+### Container and process execution
+
+dstack runs user configurations as Docker containers. The execution involves two components:
+
+- **`dstack-shim`**: Runs on the host (for VM-based backends and SSH fleets) and is responsible for:
+  - Pulling Docker images (public or private)
+  - Configuring Docker containers (mounts, GPU forwarding, entrypoint, network mode)
+  - Starting and stopping containers
+  - Managing GPU resource allocation and volume mounting/unmounting
+  - Communicating with the dstack server via REST API through an SSH tunnel
+
+- **`dstack-runner`**: Runs inside the Docker container as the entrypoint and is responsible for:
+  - Setting environment variables and secrets
+  - Executing user commands from the job specification
+  - Collecting and serving logs to the dstack server (via HTTP) and CLI (via WebSocket)
+  - Reporting job status and exit codes
+  - Handling termination signals from the dstack server
+
+**Container lifecycle**: The container entrypoint installs `openssh-server`, configures SSH keys, and starts both `sshd` and `dstack-runner`. All communication between the dstack server and `dstack-runner` happens via REST API through an SSH tunnel.
+
+**Exit code handling**: When a task's commands complete, `dstack-runner` reports the exit code to the server. If the exit code is 0, the job state becomes `DONE`. If the exit code is non-zero, the job state becomes `FAILED`. For distributed tasks, if any job fails, the run's state depends on the retry policy (see below).
+
+### Fleet-based instance provisioning
+
+dstack uses **fleets** to manage compute resources. You must create a fleet before submitting runs. When you submit a run, dstack reuses idle instances from a matching fleet or provisions new ones based on the fleet's configuration.
+
+For distributed tasks requiring multiple nodes, the fleet must have `placement: cluster` configured to ensure optimal inter-node connectivity (e.g., InfiniBand, EFA, GPUDirect). See [Cluster node management](08_cluster-node-management.md) for details on creating and configuring fleets.
+
+### Run and job state management
+
+A run can spawn one or multiple jobs (one per node for distributed tasks). The run's state aggregates the states of its jobs: if any job is `RUNNING`, the run is `RUNNING`; if all jobs are `DONE`, the run becomes `DONE`; if any job fails, the run becomes `FAILED` (unless retry is enabled).
+
+Jobs progress through states: `SUBMITTED` → `PROVISIONING` → `PULLING` → `RUNNING` → `TERMINATING` → `DONE`/`FAILED`/`TERMINATED`/`ABORTED`.
+
+### Retry policy
+
+By default, runs fail on errors, capacity issues, or instance interruptions. You can configure automatic retry using the `retry` property in the run configuration. See [Queueing, prioritization, and scheduling](02_queueing-prioritization-scheduling.md) for details on retry behavior and configuration.
+
+### Environment variables
+
+dstack automatically injects environment variables into runs that correspond to the run and job context. These are available in dev environments, tasks, and services:
+
+**Run identity**:
+- `DSTACK_RUN_NAME`: The name of the run
+- `DSTACK_RUN_ID`: The UUID of the run
+- `DSTACK_REPO_ID`: The ID of the repo
+
+**Job identity**:
+- `DSTACK_JOB_ID`: The UUID of the job submission
+
+**Resource topology**:
+- `DSTACK_GPUS_NUM`: The total number of GPUs in the run
+- `DSTACK_NODES_NUM`: The number of nodes in the run
+- `DSTACK_GPUS_PER_NODE`: The number of GPUs per node
+
+**Distributed task coordination**:
+- `DSTACK_NODE_RANK`: The rank of the node (0 for master, 1, 2, ... for workers)
+- `DSTACK_MASTER_NODE_IP`: The internal IP address of the master node
+- `DSTACK_NODES_IPS`: Newline-delimited list of internal IP addresses of all nodes
+- `DSTACK_MPI_HOSTFILE`: Path to a pre-populated MPI hostfile
+
+**Working directories**:
+- `DSTACK_WORKING_DIR`: The working directory of the run
+- `DSTACK_REPO_DIR`: The directory where the repo is mounted (if any)
+
+These variables enable distributed frameworks (PyTorch DDP, Horovod, MPI) to discover nodes and coordinate communication. For example, `torchrun` uses `DSTACK_MASTER_NODE_IP` and `DSTACK_NODE_RANK` to establish the distributed training cluster.
+
+## Appendix
+
+### MPI example with startup_order and stop_criteria
+
+For MPI workloads that require specific job startup and termination behavior, dstack provides `startup_order` and `stop_criteria` properties. This example demonstrates running NCCL tests using MPI:
+
+```yaml
+type: task
+name: nccl-tests
+
+nodes: 2
+startup_order: workers-first
+stop_criteria: master-done
+
+env:
+  - NCCL_DEBUG=INFO
+commands:
+  - |
+    if [ $DSTACK_NODE_RANK -eq 0 ]; then
+      mpirun \
+        --allow-run-as-root \
+        --hostfile $DSTACK_MPI_HOSTFILE \
+        -n $DSTACK_GPUS_NUM \
+        -N $DSTACK_GPUS_PER_NODE \
+        --bind-to none \
+        /opt/nccl-tests/build/all_reduce_perf -b 8 -e 8G -f 2 -g 1
+    else
+      sleep infinity
+    fi
+
+resources:
+  gpu: nvidia:1..8
+  shm_size: 16GB
+```
+
+**How it works**:
+- `startup_order: workers-first` ensures worker nodes (rank > 0) start before the master node (rank 0), allowing the master to connect to already-running workers.
+- `stop_criteria: master-done` causes all worker jobs to terminate when the master job completes, even if they are still executing (e.g., the `sleep infinity` command on workers).
+- The master node (rank 0) runs the MPI command using `mpirun` with the pre-populated `DSTACK_MPI_HOSTFILE`.
+- Worker nodes wait indefinitely until the master completes, at which point they are automatically terminated.

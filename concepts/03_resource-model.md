@@ -98,6 +98,7 @@ Resources are specified in run configurations (tasks, dev environments, services
 - **GPU specification format**: The `gpu` property accepts vendor, model names, memory ranges, and count ranges. The general format is `<vendor>:<comma-separated names>:<memory range>:<quantity range>`, where each component is optional. Ranges can be closed (`24GB..80GB`), open (`24GB..`), or single values (`24GB`).
 - **GPU vendor support**: dstack supports `nvidia`, `amd`, `tpu` (Google Cloud TPU), `intel` (Gaudi), and `tenstorrent` vendors.
 - **Resource examples**: `1` (any GPU), `nvidia:2` (two NVIDIA GPUs), `A100` (one A100), `A10G,A100` (either A10G or A100), `24GB..` (any GPU with at least 24GB), `24GB..40GB:2` (two GPUs between 24GB and 40GB), `A100:80GB` (one 80GB A100), `A100:2` (two A100s), `A100:40GB:2` (two 40GB A100s).
+- **Shared memory (`shm_size`)**: Docker containers have a default shared memory size of 64MB (`/dev/shm`), which is often insufficient for multi-GPU and multi-node workloads. The `shm_size` property configures the shared memory size. For distributed training with PyTorch or other frameworks that use shared memory for inter-process communication, set `shm_size` to at least `16GB` or `24GB` depending on the workload. This is especially critical for multi-node distributed tasks where processes communicate via shared memory.
 
 **Example: task with GPU resources** (`.dstack.yml`):
 ```yaml
@@ -113,6 +114,8 @@ resources:
   gpu: 40GB..80GB:4
   # 200GB or more RAM
   memory: 200GB..
+  # Shared memory (required for multi-GPU/multi-node)
+  shm_size: 24GB
   # Disk size
   disk: 500GB
 
