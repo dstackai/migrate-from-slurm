@@ -16,7 +16,7 @@ We welcome feedback on the Slurm documentation and mappings. You can contribute 
 - [x] [2 Queueing, prioritization, and scheduling mechanics](concepts/02_queueing-prioritization-scheduling.md)
 - [x] [3 Resource model, generic resources (TRES/GRES), and enforcement](concepts/03_resource-model.md)
 - [x] [4 Job submission, allocation, and execution](concepts/04_job-execution-lifecycle.md)
-- [ ] [5 Accounts, QOS, and accounting pipeline](concepts/05_policy-accounting.md)
+- [x] [5 Accounts, QOS, and accounting pipeline](concepts/05_policy-accounting.md)
 - [ ] [6 Job arrays & dependencies](concepts/06_job-organization.md)
 - [ ] [7 Cluster node management, health, and lifecycle](concepts/07_cluster-node-management.md)
 - [ ] [8 Filesystems and data access](concepts/08_file-systems.md)
