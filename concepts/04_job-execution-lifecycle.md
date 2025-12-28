@@ -360,8 +360,7 @@ resources:
   shm_size: 24GB
 ```
 
-!!! info "Fleet requirement for distributed tasks"
-    Distributed tasks require a fleet with `placement: cluster` configured. This ensures instances are provisioned with optimal inter-node connectivity (e.g., InfiniBand, EFA, GPUDirect) for distributed workloads. See [Fleet-based instance provisioning](#fleet-based-instance-provisioning) below and [Cluster node management](08_cluster-node-management.md) for details on creating and configuring fleets.
+**Fleet requirement for distributed tasks:** Distributed tasks require a fleet with `placement: cluster` configured. This ensures instances are provisioned with optimal inter-node connectivity (e.g., InfiniBand, EFA, GPUDirect) for distributed workloads. See [Fleet-based instance provisioning](#fleet-based-instance-provisioning) below and [Cluster node management](08_cluster-node-management.md) for details on creating and configuring fleets.
 
 **Job startup and termination order**: For distributed tasks, the `startup_order` property controls when jobs start. With `workers-first`, worker nodes start before the master node. The `stop_criteria` property controls when jobs terminate. With `master-done`, worker jobs terminate when the master job completes, even if they are still running (e.g., waiting in `sleep infinity`). See [MPI example](#mpi-example-with-startup-order-and-stop-criteria) in the appendix for a complete example using these properties.
 
