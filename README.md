@@ -15,7 +15,7 @@ We welcome feedback on the Slurm documentation and mappings. You can contribute 
 - [x] [1 Control plane, state, and scaling](concepts/01_control-plane.md)
 - [x] [2 Queueing, prioritization, and scheduling mechanics](concepts/02_queueing-prioritization-scheduling.md)
 - [x] [3 Resource model & generic resources (TRES/GRES)](concepts/03_resource-model.md)
-- [ ] [4 Job submission, allocation, and execution](concepts/04_job-execution-lifecycle.md)
+- [x] [4 Job submission, allocation, and execution](concepts/04_job-execution-lifecycle.md)
 - [ ] [5 Resource enforcement, containment, and limits](concepts/05_resource-enforcement.md)
 - [ ] [6 Accounts, QOS, and accounting pipeline](concepts/06_policy-accounting.md)
 - [ ] [7 Job arrays & dependencies](concepts/07_job-organization.md)
