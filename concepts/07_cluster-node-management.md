@@ -107,4 +107,94 @@ Slurm relies on the filesystem for basic operational stability.
 
 ## dstack
 
-TBA
+### Fleets
+
+Fleets in `dstack` act as pools of instances and templates for how those instances are provisioned. Unlike Slurm's static node configuration, fleets provide a dynamic abstraction that can span cloud providers or on-premises infrastructure.
+
+`dstack` supports two types of fleets:
+
+- **Backend fleets**: Dynamically provisioned through configured backends (cloud providers or Kubernetes). You specify resource requirements and a `nodes` range; `dstack` provisions matching instances.
+  ```yaml
+  type: fleet
+  name: my-fleet
+  nodes: 0..2  # min..max instances
+  resources:
+    gpu: A100:80GB:2
+  ```
+
+- **SSH fleets**: Use existing on-premises servers. List hostnames/IPs; `dstack` connects, installs dependencies, and registers them.
+  ```yaml
+  type: fleet
+  name: my-fleet
+  ssh_config:
+    user: ubuntu
+    identity_file: ~/.ssh/id_rsa
+    hosts:
+      - 192.168.1.10
+      - 192.168.1.11
+  ```
+
+- **Node ranges and scaling**: Specify `nodes: min..max` to control fleet size. Instances scale up when jobs need resources and scale down when idle. The `idle_duration` parameter controls how long an instance must remain idle before auto-termination (default: 3 days). If `min > 0`, that many instances are pre-provisioned.
+
+### Fleet management
+
+- Create/update fleet: `dstack apply -f fleet.dstack.yml`
+- List fleets: `dstack fleet` or `dstack fleet list`
+- Delete fleet: `dstack delete -f fleet.dstack.yml` or `dstack fleet delete <name>`
+
+### Fleet instance states
+
+Fleet instances have several states:
+
+- **`idle`**: Available and ready for jobs
+- **`busy`**: Running one or more jobs
+- **`unreachable`**: Cannot be contacted; excluded from scheduling
+
+### Placement: cluster
+
+For distributed workloads that require fast inter-node communication (such as distributed training), `dstack` supports fleets with `placement: cluster`. This configuration ensures that all instances within the fleet are provisioned with optimal inter-node connectivity.
+
+- **Backend fleets**: `dstack` auto-configures high-performance networking (e.g., EFA on AWS, GPUDirect/RoCE on GCP). Supported on major cloud backends and [Kubernetes](15_kubernetes.md).
+
+- **SSH fleets**: Indicates hosts are interconnected. Requires pre-configured interconnect drivers (e.g., InfiniBand).
+
+### Blocks
+
+Blocks divide instances into resource slices to enable concurrent jobs. Resources (GPU, CPU, memory) split evenly; disk is shared. Set `blocks: auto` to match GPU count.
+
+- **Backend fleets**: Configure at fleet level
+- **SSH fleets**: Configure per host
+- **Distributed tasks**: Require all blocks on each node
+
+### Auto-update
+
+`dstack-shim` and `dstack-runner` support automatic updates. The `dstack` server periodically checks the installed versions of these components on fleet instances and automatically updates them to match the server's expected version. This ensures that fleet instances remain compatible with the server without manual intervention. The update process happens in the background and does not interrupt running jobs.
+
+### Provisioning and hardware detection
+
+- **Backend fleets**: Instances provisioned to match specified requirements. Hardware known in advance from cloud instance types.
+
+- **SSH fleets**: Existing servers discovered and registered. Hardware detected from what's present on each host.
+
+### Maintenance
+
+`dstack` has no maintenance concept (no equivalent to Slurm's `DRAIN` state that allows running jobs to finish while refusing new allocations).
+
+- **Backend fleets**: Delete/terminate the instance; `dstack` provisions a replacement if needed.
+- **SSH fleets**: Remove host from fleet config, perform maintenance, then re-add.
+
+### Health monitoring
+
+`dstack` monitors instance health through multiple mechanisms:
+
+- **Instance connectivity**: Heartbeats to the `dstack` server. Instances that cannot be contacted are marked as `unreachable` and automatically excluded from scheduling.
+
+**GPU health**: `dstack` integrates with NVIDIA DCGM (Data Center GPU Manager) via `dstack-shim` to detect GPU health. This provides passive health checks that continuously monitor GPU hardware for reliability issues. The health status is displayed in fleet listings:
+
+- **`idle`**: No issues detected, instance is healthy and ready for workloads.
+- **`idle (warning)`**: Non-fatal issues detected (e.g., correctable ECC errors). The instance remains usable but should be monitored.
+- **`idle (failure)`**: Fatal issues detected. The instance is automatically excluded from scheduling.
+
+GPU health checks work on supported cloud backends and SSH fleets where DCGM is installed.
+
+**Metrics**: `dstack` automatically collects metrics such as CPU usage, GPU utilization, memory consumption, and GPU memory usage. For detailed information on GPU health monitoring and general metrics, see the [GPU health monitoring](10_gpu-health-monitoring.md) and [monitoring and observability](14_monitoring-observability.md) guides.
