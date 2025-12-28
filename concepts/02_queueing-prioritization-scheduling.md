@@ -131,7 +131,7 @@ A run is the primary unit of workload in dstack (similar to a Slurm job). A run 
 
 - **Job states**: Jobs have states: `SUBMITTED`, `PROVISIONING`, `PULLING` (Docker image being pulled), `RUNNING`, `TERMINATING`, and terminal states `DONE`, `FAILED`, `TERMINATED`, or `ABORTED`.
 - **Run states**: A run's state is an aggregate of its jobs' states. For example, a run becomes `RUNNING` when any job enters `RUNNING`, and `PROVISIONING` when any job is `PROVISIONING` or `PULLING`.
-- **Distributed tasks**: For distributed tasks, fleet nodes may start independently, but dstack ensures all nodes are provisioned and ready before any job starts. Each job is scheduled independently, but the run waits for all instances to be ready before starting any job. Job start order (including for clusters) and detailed mechanics are explained in the [job execution lifecycle](04_job-execution-lifecycle.md) and [cluster node management](08_cluster-node-management.md) guides.
+- **Distributed tasks**: For distributed tasks, fleet nodes may start independently, but dstack ensures all nodes are provisioned and ready before any job starts. Each job is scheduled independently, but the run waits for all instances to be ready before starting any job. Job start order (including for clusters) and detailed mechanics are explained in the [job execution lifecycle](04_job-execution-lifecycle.md) and [cluster node management](07_cluster-node-management.md) guides.
 
 ### Retry policy
 
@@ -202,7 +202,7 @@ Tasks can be scheduled to run periodically using cron syntax.
     gpu: H100:1
   ```
 
-The detailed mechanics of execution and cluster node management are covered in the [job execution lifecycle](04_job-execution-lifecycle.md) and [cluster node management](08_cluster-node-management.md) guides.
+The detailed mechanics of execution and cluster node management are covered in the [job execution lifecycle](04_job-execution-lifecycle.md) and [cluster node management](07_cluster-node-management.md) guides.
 
 ### Scheduling considerations
 

@@ -1,4 +1,4 @@
-# 10 Fault tolerance, checkpointing, and job recovery
+# 9 Fault tolerance, checkpointing, and job recovery
 
 ## Slurm
 

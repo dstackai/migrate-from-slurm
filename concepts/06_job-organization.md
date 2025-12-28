@@ -1,4 +1,4 @@
-# 7 Job arrays & dependencies
+# 6 Job arrays & dependencies
 
 ## Slurm
 

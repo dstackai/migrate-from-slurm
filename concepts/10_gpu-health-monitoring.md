@@ -1,4 +1,4 @@
-# 11 GPU health monitoring and device constraints
+# 10 GPU health monitoring and device constraints
 
 ## Slurm
 

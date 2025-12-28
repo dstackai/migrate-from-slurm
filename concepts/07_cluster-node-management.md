@@ -1,4 +1,4 @@
-# 8 Cluster node management, health, and lifecycle
+# 7 Cluster node management, health, and lifecycle
 
 ## Slurm
 

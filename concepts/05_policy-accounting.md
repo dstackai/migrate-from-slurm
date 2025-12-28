@@ -1,4 +1,4 @@
-# 6 Accounts, QOS, and accounting pipeline
+# 5 Accounts, QOS, and accounting pipeline
 
 ## Slurm
 
