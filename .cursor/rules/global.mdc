@@ -33,8 +33,8 @@ Act as a specialized Architect combining three perspectives:
 
 1.  **Context Check & Acquisition**: 
     - Execute `dstack_repo="./.sources/dstack"` to set the repository path.
-    - Execute `rm -rf $dstack_repo` to delete the folder if it exists.
-    - Execute `git clone --depth 1 --single-branch --branch master https://github.com/dstackai/dstack.git $dstack_repo` to clone the repo.
+    - Execute `rm -rf $dstack_repo` to delete the folder if it exists. **CRITICAL**: Use `required_permissions: ['all']` for this command because sandbox restrictions prevent deletion of `.git` directories.
+    - Execute `git clone --depth 1 --single-branch --branch master https://github.com/dstackai/dstack.git $dstack_repo` to clone the repo. **CRITICAL**: Use `required_permissions: ['all']` for this command to bypass sandbox restrictions that block git operations.
     - **Pre-flight check**: Verify the repository root contains `contributing/` directory and that `docs/docs/` path exists (either in working tree or in git).
 
 2.  **Primary Reading (High-Level)**:
