@@ -62,4 +62,92 @@ Recovering distributed jobs is strictly harder than single-node jobs.
 
 ## dstack
 
-TBA
+### Instance failure detection
+
+dstack continuously monitors instance health and connectivity to detect failures.
+
+- **Unreachable instances**: dstack tracks instance reachability via periodic health checks. If an instance becomes unreachable (e.g., due to network issues or hardware failure), dstack marks it with an `unreachable` flag. If an instance remains unreachable beyond a termination deadline, dstack marks it as `TERMINATING` with termination reason `UNREACHABLE`.
+- **Instance health status**: Instances can have health statuses: `HEALTHY`, `WARNING`, or `FAILURE`. Unhealthy instances are automatically excluded from scheduling to prevent jobs from running on degraded hardware. For GPU instances, dstack integrates with NVIDIA DCGM (Data Center GPU Manager) via `dstack-shim` to perform passive GPU health checks, monitoring for reliability issues (e.g., ECC errors, thermal issues) without interrupting workloads. Health checks work automatically on supported cloud backends (AWS, Azure, GCP, OCI) and SSH fleets where DCGM is installed. Health status is displayed in fleet listings:
+  ```bash
+  $ dstack fleet
+  
+   FLEET     INSTANCE  BACKEND          RESOURCES  STATUS          PRICE   CREATED
+   my-fleet  0         aws (us-east-1)  T4:16GB:1  idle            $0.526  11 mins ago
+             1         aws (us-east-1)  T4:16GB:1  idle (warning)  $0.526  11 mins ago
+             2         aws (us-east-1)  T4:16GB:1  idle (failure)  $0.526  11 mins ago
+  ```
+  Instances with `idle (warning)` remain usable but should be monitored, while instances with `idle (failure)` are automatically excluded from scheduling. For detailed information on GPU health monitoring, see the [GPU health monitoring](10_gpu-health-monitoring.md) and [monitoring and observability](14_monitoring-observability.md) guides.
+
+### Backend fleet instance management
+
+For backend fleets, dstack automatically maintains the configured minimum number of instances.
+
+- **Minimum instance guarantee**: When a fleet is configured with a minimum number of nodes (e.g., `nodes: 2..8`), dstack continuously ensures at least that many instances are active. If an instance fails or is terminated, dstack automatically provisions a replacement to maintain the minimum.
+- **Automatic replacement**: Failed instances are detected and replaced by the fleet maintenance process, which runs periodically to check the fleet state and provision missing instances.
+
+### Retry policy
+
+By default, dstack does not retry failed runs. If a job fails to provision, exits with an error, or is interrupted, the run fails immediately.
+
+- **Retry configuration**: Retry can be enabled via the `retry` property in the run configuration, specifying which events trigger retries (`on_events`: `no-capacity`, `error`, or `interruption`) and the maximum retry duration. Duration is calculated from run age for `no-capacity` events, or from the last event occurrence for `interruption` and `error` events.
+- **Example: task configuration with retry** (`.dstack.yml`):
+  ```yaml
+  type: task
+  name: train
+  
+  python: 3.12
+  repos:
+    - .  # Clone current directory repo
+  commands:
+    - python train.py
+  
+  retry:
+    on_events: [no-capacity, error, interruption]
+    duration: 1h
+  ```
+
+### Distributed task retry
+
+For distributed tasks (multi-node runs), retry behavior ensures all nodes are provisioned together.
+
+- **All-or-nothing retry**: If any job of a distributed task fails and retry is enabled, dstack stops all jobs and resubmits the entire run. This ensures all nodes are provisioned together and maintains cluster connectivity requirements (e.g., InfiniBand, EFA).
+- **Scheduling coordination**: When retrying a distributed task, dstack waits for all required instances to be available before starting any job, ensuring the cluster is fully provisioned before execution begins.
+
+### Persistence via volumes
+
+Unlike Slurm's shared filesystem model, dstack uses volumes for persistent storage across runs.
+
+- **Network volumes**: Cloud-managed persistent storage volumes that survive across runs. Volumes are bound to a specific backend and region, and can be attached to runs to persist data.
+- **Instance volumes**: Host directories mounted into containers, useful for caching or when using SSH fleets with pre-mounted network storage.
+- **Checkpointing**: Applications can save checkpoints to volume-mounted directories, which persist even if the run fails or is interrupted. For detailed information on volumes and filesystem access, see the [filesystems guide](08_file-systems.md).
+
+### Spot instances support
+
+dstack supports spot instances (preemptible/transient instances) via the `spot_policy` configuration.
+
+- **Spot policies**: Configure `spot_policy` as `spot` (only spot instances), `on-demand` (only on-demand instances), or `auto` (prefer spot, fall back to on-demand). Spot instances are typically cheaper but can be interrupted by the cloud provider.
+- **Spot interruptions**: When a spot instance is interrupted, the job termination reason is set to `INTERRUPTED_BY_NO_CAPACITY`. By default, dstack does not retry interrupted runs. If retry is enabled with `interruption` in `on_events`, dstack automatically resubmits the run.
+- **Example: task configuration with spot policy and retry** (`.dstack.yml`):
+  ```yaml
+  type: task
+  name: train
+  
+  python: 3.12
+  repos:
+    - .  # Clone current directory repo
+  commands:
+    - python train.py
+  
+  spot_policy: auto  # Prefer spot instances, fall back to on-demand
+  retry:
+    on_events: [interruption]
+    duration: 1h
+  ```
+
+### Exit code handling
+
+dstack captures container exit codes, container errors, and job errors to determine job success or failure.
+
+- **Exit code interpretation**: Exit code `0` marks the job as `DONE`; any non-zero exit code marks it as `FAILED`. Commands execute sequentially, and execution stops if any command exits with a non-zero code.
+- **Inspecting exit codes**: Exit codes can be viewed via `dstack ps` (use `dstack ps -v` for verbose output), `dstack attach`, or the API.
+- **Distributed tasks**: If any job fails (non-zero exit code), the run becomes `FAILED` unless retry is enabled, in which case the run is resubmitted.

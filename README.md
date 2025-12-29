@@ -20,7 +20,7 @@ We welcome feedback on the Slurm documentation and mappings. You can contribute 
 - [x] [6 Job arrays & dependencies](concepts/06_job-organization.md)
 - [x] [7 Cluster node management, health, and lifecycle](concepts/07_cluster-node-management.md)
 - [x] [8 Filesystems and data access](concepts/08_file-systems.md)
-- [ ] [9 Fault tolerance, checkpointing, and job recovery](concepts/09_fault-tolerance.md)
+- [x] [9 Fault tolerance, checkpointing, and job recovery](concepts/09_fault-tolerance.md)
 - [ ] [10 GPU health monitoring and device constraints](concepts/10_gpu-health-monitoring.md)
 - [ ] [11 Partition design, node grouping, and queue layout](concepts/11_partition-design.md)
 - [ ] [12 Authentication and security](concepts/12_authentication-security.md)
