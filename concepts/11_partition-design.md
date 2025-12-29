@@ -65,4 +65,28 @@ A common confusion is "When do I use a Partition vs. a QOS?"
 
 ## dstack
 
-TBA
+### Fleets
+
+In `dstack`, **fleets** are the only way to organize instances. Unlike Slurm's partitions, which provide a logical layer that can overlap (nodes can belong to multiple partitions) and work alongside QOS and accounts, there is no additional way to group instances logically beyond fleets.
+
+Fleets serve as both the pool of instances and the template for how those instances are provisioned. All instance organization, resource allocation, and provisioning configuration happens at the fleet level.
+
+- **No overlapping fleets**: Unlike Slurm partitions, a single instance cannot belong to multiple fleets simultaneously—each instance belongs to exactly one fleet.
+
+### Fleet selection
+
+Unlike Slurm, which requires a system-enforced default partition, `dstack` has no system-enforced default fleet.
+
+- **Automatic selection**: When you submit a run without specifying a fleet, `dstack` automatically evaluates all available fleets and selects the optimal one based on resource requirements, availability, and cost. It prioritizes fleets with existing idle instances over fleets requiring new provisioning.
+- **Explicit specification**: You can explicitly specify fleets via the `fleets` property in the run configuration or `--fleet` with `dstack apply`.
+- **Elastic fleets**: Users can create elastic fleets (with node ranges like `nodes: 0..10`) that effectively serve as default-like fleets by accommodating diverse workloads.
+
+### Usage quotas and access control
+
+- **No usage quotas**: `dstack` does not support usage quotas or per-user resource limits (unlike Slurm's association-based limits such as `MaxJobs`, `MaxCPUs`, `GrpTRES`).
+- **Resource sharing**: All users within a project share the same fleet capacity equally. Projects are isolated from each other and do not share compute resources.
+- **Access control**: Access to fleets is controlled at the project level. All users within a project have equal access to all fleets configured for that project. For details on authentication and access control, see the [Authentication and security](12_authentication-security.md) guide.
+
+For detailed information on fleets, fleet management, instance states, health monitoring, and lifecycle management, see the [Cluster node management, health, and lifecycle](07_cluster-node-management.md) guide.
+
+For information on how partitions and fleets relate to queueing and scheduling mechanics, see the [Queueing, prioritization, and scheduling](02_queueing-prioritization-scheduling.md) guide.

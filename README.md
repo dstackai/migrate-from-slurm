@@ -22,7 +22,7 @@ We welcome feedback on the Slurm documentation and mappings. You can contribute 
 - [x] [8 Filesystems and data access](concepts/08_file-systems.md)
 - [x] [9 Fault tolerance, checkpointing, and job recovery](concepts/09_fault-tolerance.md)
 - [x] [10 GPU health monitoring and device constraints](concepts/10_gpu-health-monitoring.md)
-- [ ] [11 Partition design, node grouping, and queue layout](concepts/11_partition-design.md)
+- [x] [11 Partition design, node grouping, and queue layout](concepts/11_partition-design.md)
 - [ ] [12 Authentication and security](concepts/12_authentication-security.md)
 - [ ] [13 Reservations](concepts/13_reservations.md)
 - [ ] [14 Monitoring and observability](concepts/14_monitoring-observability.md)
