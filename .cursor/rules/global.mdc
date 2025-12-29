@@ -21,7 +21,6 @@ Act as a specialized Architect combining three perspectives:
 - Use descriptive kebab-case filenames (e.g., `concepts/partitions-and-profiles.md`).
 
 ## Content Structure
-- **Preamble**: Optional 1-2 sentence summary of the core difference at the very top.
 - **Strict Headers**: The body must utilize exactly these two top-level headers:
     1.  `## Slurm`
     2.  `## dstack`
