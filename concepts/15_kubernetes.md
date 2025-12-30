@@ -179,4 +179,74 @@ Soperator commonly uses a shared “jail” filesystem to provide a consistent r
 
 ## dstack
 
-TBA
+### Kubernetes as a backend
+
+In `dstack`, Kubernetes is a **container-based backend**—one option alongside native cloud backends (VM-based) and SSH fleets. `dstack` treats Kubernetes as another compute target for orchestrating dev environments, tasks, and services.
+
+**Backend types in dstack:**
+
+- **VM-based backends** (e.g., AWS, GCP, Azure, Lambda): `dstack` provisions VMs and launches the `dstack-shim` agent inside each VM. The shim controls the VM and starts Docker containers for user jobs. This provides fine-grained control and supports features like blocks, instance volumes, privileged containers, and reusable instances.
+
+- **Container-based backends** (e.g., Kubernetes, RunPod, Vast.ai): `dstack` orchestrates container-based runs directly. With Kubernetes, `dstack` delegates provisioning to Kubernetes and runs containers as pods. Since `dstack` doesn't control the underlying nodes, container-based backends don't support some features available with VM-based backends (see limitations below).
+
+- **SSH fleets**: For on-prem servers or existing infrastructure, `dstack` can create fleets from SSH-accessible hosts without requiring a backend configuration.
+
+### Kubernetes backend configuration
+
+Configure the backend in `~/.dstack/server/config.yml`:
+
+```yaml
+projects:
+  - name: main
+    backends:
+      - type: kubernetes
+        kubeconfig:
+          filename: ~/.kube/config
+        proxy_jump:
+          hostname: 204.12.171.137
+          port: 32000
+```
+
+**Proxy jump:** `dstack` requires a node to act as a jump host to proxy SSH traffic into containers. Both the `dstack` server and CLI must be able to reach this node (GPU or CPU-only). `dstack` configures and manages the proxy automatically.
+
+**GPU detection:** For `dstack` to detect GPUs, the cluster must have the appropriate GPU operator pre-installed (e.g., [NVIDIA GPU Operator](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/index.html) for NVIDIA GPUs).
+
+<!-- TODO: Add instructions for AMD GPU operator/device plugin setup -->
+
+**Minimum node requirement:** `dstack` requires at least one node to always be provisioned in Kubernetes clusters for two reasons: (1) `dstack` loads offers based on labels available on existing nodes, so if the cluster supports specific GPUs, at least one node with such GPU must be running; (2) at least one node must be available to host the jump pod that proxies SSH traffic into containers (this node can be CPU-only). If using managed Kubernetes with autoscaling, set the node pool's desired count to at least 1.
+
+### Fleet configuration
+
+Create fleets with `placement: cluster` for Kubernetes backends. Since Kubernetes clusters are interconnected by default, you can always set `placement: cluster` for all workload types:
+
+```yaml
+type: fleet
+name: my-k8s-fleet
+
+placement: cluster
+# For Kubernetes, min must be 0 since dstack can't pre-provision VMs
+nodes: 0..
+
+backends: [kubernetes]
+
+resources:
+  gpu: 1..8
+```
+
+### Limitations and unsupported features
+
+Container-based backends (including Kubernetes) delegate node lifecycle management to Kubernetes, so some VM-based features aren't available:
+
+- **Pre-provisioning**: Setting `nodes` range to start above `0` is not supported (only VM-based backends support this)
+- **Reusable instances**: Unlike VM-based backends where instances can remain idle and reusable, Kubernetes instances are immediately terminated when idle and returned to the cluster
+- **Instance volumes**: Mounting host directories into containers via dstack's instance volumes is not supported
+- **Network volumes**: dstack's network volumes feature is not supported (Kubernetes native volumes can still be used)
+- **Blocks**: Resource sharing via dstack's blocks abstraction is not supported; Kubernetes handles resource sharing through its native mechanisms (resource requests/limits, node selectors, etc.)
+- **Idle duration**: The `idle_duration` setting doesn't apply since `dstack` doesn't control the underlying node lifecycle
+- **Auto-scaling**: `dstack` can only run on pre-provisioned Kubernetes nodes. Support for auto-scalable clusters (scale to zero) is coming soon
+
+**Note:** Unlike other container-based backends, Kubernetes supports privileged containers (often required for InfiniBand access).
+
+### When to use Kubernetes backend
+
+Use the `kubernetes` backend if your GPUs already run on Kubernetes and your team depends on Kubernetes tooling. Otherwise, consider VM-based backends for better provisioning control or SSH fleets for on-prem simplicity.

@@ -26,7 +26,7 @@ We welcome feedback on the Slurm documentation and mappings. You can contribute 
 - [x] [12 Authentication and security](concepts/12_authentication-security.md)
 - [x] [13 Reservations](concepts/13_reservations.md)
 - [x] [14 Monitoring and observability](concepts/14_monitoring-observability.md)
-- [ ] [15 Kubernetes integration](concepts/15_kubernetes.md)
+- [x] [15 Kubernetes integration](concepts/15_kubernetes.md)
 
 ## Project structure
 
