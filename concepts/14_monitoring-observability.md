@@ -95,5 +95,105 @@ Slurm can export metrics for integration with monitoring systems.
 
 ## dstack
 
-TBA
+
+### CLI
+
+- **`dstack ps`**: Lists runs and their status. By default, shows unfinished runs or the last finished run. Use `--all` (or `-a`) to show all runs, `--verbose` (or `-v`) for additional details, `--watch` (or `-w`) to monitor status in real-time, and `--json` (or `--format json`) for JSON output. The output shows run names, backends, resources (GPU, CPU, memory), prices, status, and submission time.
+
+**Example: `dstack ps` output**:
+```bash
+$ dstack ps
+
+ NAME          BACKEND  GPU             PRICE    STATUS       SUBMITTED
+ training-job  aws      H100:1 (spot)   $4.50    running      5 mins ago
+ dev-env       gcp      L4:24GB         $0.16    provisioning 2 mins ago
+```
+
+**Example: `dstack ps --json` output**:
+```bash
+$ dstack ps --json
+{
+  "runs": [
+    {
+      "run_name": "training-job",
+      "status": "running",
+      "submitted_at": "2024-01-15T10:30:00Z",
+      "jobs": [
+        {
+          "job_name": "training-job-0-0",
+          "status": "running",
+          "backend": "aws",
+          "region": "us-east-1",
+          "resources": {
+            "gpus": [{"name": "H100", "memory_mib": 81920}],
+            "cpus": 32,
+            "memory_mib": 262144
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+- **`dstack fleet`**: Lists fleet instances and their status. Shows fleet names, instance numbers, backends, resources (GPU), prices, status (including GPU health warnings), and creation time. Use `--watch` (or `-w`) to monitor fleet status in real-time, and `--verbose` (or `-v`) for additional details.
+
+**Example: `dstack fleet` output with GPU health status**:
+```bash
+$ dstack fleet
+
+ FLEET     INSTANCE  BACKEND          RESOURCES  STATUS          PRICE   CREATED
+ my-fleet  0         aws (us-east-1)  T4:16GB:1  idle            $0.526  11 mins ago
+           1         aws (us-east-1)  T4:16GB:1  idle (warning)  $0.526  11 mins ago
+           2         aws (us-east-1)  T4:16GB:1  idle (failure)  $0.526  11 mins ago
+```
+
+The status field shows GPU health status detected by DCGM health checks: `idle` (healthy), `idle (warning)` (non-fatal issues like correctable ECC errors), or `idle (failure)` (fatal issues like uncorrectable ECC errors or PCIe failures). Instances with `idle (failure)` are automatically excluded from scheduling. For details on DCGM health monitoring, see the Metrics section below.
+
+### REST API
+
+The `dstack` server provides REST API endpoints for all entities, including runs/jobs, fleets/instances, and metrics.
+
+### Metrics
+
+#### Essential metrics
+
+`dstack-runner` automatically collects essential per-job metrics using `nvidia-smi` for NVIDIA GPUs, `amd-smi` for AMD GPUs, `tt-smi` for Tenstorrent accelerators, etc. These metrics include CPU usage, memory usage, GPU utilization, and GPU memory usage. Metrics are collected periodically during job execution and stored by the `dstack` server.
+
+The `dstack metrics` CLI command shows hardware metrics (CPU, memory, GPU utilization) for a specific run. Displays the most recently tracked metrics per job. Use `--watch` (or `-w`) to monitor metrics in real-time.
+
+**Example: `dstack metrics` output**:
+```bash
+$ dstack metrics gentle-mayfly-1
+
+ NAME             STATUS  CPU  MEMORY          GPU
+ gentle-mayfly-1  done    0%   16.27GB/2000GB  gpu=0 mem=72.48GB/80GB util=0%
+                                               gpu=1 mem=64.99GB/80GB util=0%
+                                               gpu=2 mem=580MB/80GB util=0%
+                                               gpu=3 mem=4MB/80GB util=0%
+```
+
+The `dstack` UI also provides a visual interface for viewing these metrics.
+
+#### DCGM integration
+
+For NVIDIA GPUs, `dstack-shim` integrates with DCGM (Data Center GPU Manager) to provide passive GPU health monitoring and advanced telemetry. DCGM is automatically available on VM-based fleets for AWS, Azure, GCP, and OCI backends. For SSH fleets, ensure the `datacenter-gpu-manager-4-core`, `datacenter-gpu-manager-4-proprietary`, and `datacenter-gpu-manager-exporter` packages are installed on the hosts.
+
+DCGM telemetry includes GPU utilization, memory usage, temperature, power consumption, ECC error counts, PCIe replay counters, NVLink errors, and many other hardware telemetry metrics. However, these advanced DCGM telemetry metrics are only accessible via Prometheus (see the Prometheus section below). The CLI and UI only display essential metrics (CPU, memory, GPU utilization, GPU memory usage) collected via `nvidia-smi` and similar vendor utilities.
+
+The DCGM metrics are only available via the Prometheus integration (see below).
+
+##### Prometheus
+
+To enable Prometheus metrics export, set the `DSTACK_ENABLE_PROMETHEUS_METRICS` environment variable on the `dstack` server and configure Prometheus to scrape metrics from `<dstack server URL>/metrics`. When enabled, `dstack-shim` can export DCGM metrics to Prometheus using `dcgm-exporter` (if available on the host). The `dstack` server collects these metrics from running jobs only (not from idle instances) and exposes them via the `/metrics` endpoint. In addition to essential metrics available via CLI and UI, `dstack` exports additional metrics to Prometheus, including data on fleets, runs, jobs, and DCGM telemetry.
+
+Prometheus exports include:
+- **Fleet**: Instance duration, price, GPU count (with labels for project, fleet, instance, backend, GPU)
+- **Run**: Run counters (total, terminated, failed, done) per user and project
+- **Job**: Job duration, price, CPU/memory/GPU usage, and DCGM telemetry (with labels for project, user, run, job, backend, GPU)
+- **Server health**: HTTP request counts and durations
+
+### Health monitoring
+
+- **Active health checks (NCCL and RCCL tests)**: Unlike Slurm's automated health check scripts, `dstack` does not automatically run active diagnostic tests. However, administrators can manually run active checks such as NCCL (NVIDIA) or RCCL (AMD) tests as distributed tasks to validate GPU-to-GPU communication and interconnect bandwidth across a fleet. For detailed examples, see the [GPU health monitoring](10_gpu-health-monitoring.md) guide.
 
