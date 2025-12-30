@@ -53,5 +53,25 @@ Reservations transition through states as they are created, activated, and compl
 
 ## dstack
 
-TBA
+dstack does not support Slurm-style time-based reservations that block specific nodes or resources from normal job allocation during defined time periods. However, dstack supports cloud provider reservations for AWS and GCP, which are created and managed through the cloud provider's interface. 
+
+### Cloud reservations
+
+dstack can provision instances from these reservations by referencing a reservation ID. Unlike Slurm, dstack does not block resources from other jobs when a reservation is active—reservations only determine which instances can be provisioned, not which jobs can run.
+
+To use a cloud reservation, specify the `reservation` parameter in your fleet or profile configuration:
+- **AWS**: Use the capacity reservation ID (e.g., `cr-0123456789abcdef0`) for Capacity Reservations (billed at on-demand rates) or Capacity Blocks (time-based, discounted rates for ML workloads)
+- **GCP**: Use the full reservation path (e.g., `projects/my-project/reservations/my-reservation`) or just the reservation name
+
+**Example**:
+```yaml
+type: fleet
+name: my-fleet
+nodes: 2
+placement: cluster
+backends: [aws]
+resources:
+  gpu: A100:80GB:8
+reservation: cr-0123456789abcdef0  # AWS capacity reservation ID
+```
 
