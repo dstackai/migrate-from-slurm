@@ -2,15 +2,13 @@
 
 This repo documents key Slurm's concepts and how they map to `dstack`'s equvivalents. Once the mapping is finalized, this documentation will be integrated into the `dstack` [docs](https://dstack.ai/docs/).
 
-## Feedback
+## Main guide
 
-We welcome feedback on the Slurm documentation and mappings. You can contribute in the following ways:
+**[Migration Guide: Slurm to dstack](guide.md)** - A comprehensive migration guide covering architectural similarities, key differences, and practical examples demonstrating feature implementations in both systems.
 
-- **Create an issue**: Open a [GitHub issue](https://github.com/dstackai/migrate-from-slurm/issues) to report errors, suggest improvements, or ask questions about the documentation
-- **Submit a PR**: Submit a [pull request](https://github.com/dstackai/migrate-from-slurm/pulls) with corrections, additions, or improvements to the documentation
-- **Contact directly**: Reach out to [@peterschmidt85](https://github.com/peterschmidt85) on GitHub for direct feedback or questions
+## Additional detailed concept guides
 
-## Work in progress
+For in-depth coverage of specific topics, see these additional detailed guides:
 
 - [x] [1 Control plane, state, and scaling](concepts/01_control-plane.md)
 - [x] [2 Queueing, prioritization, and scheduling mechanics](concepts/02_queueing-prioritization-scheduling.md)
@@ -28,6 +26,15 @@ We welcome feedback on the Slurm documentation and mappings. You can contribute 
 - [x] [14 Monitoring and observability](concepts/14_monitoring-observability.md)
 - [x] [15 Kubernetes integration](concepts/15_kubernetes.md)
 
+## Feedback
+
+We welcome feedback on the Slurm documentation and mappings. You can contribute in the following ways:
+
+- **Create an issue**: Open a [GitHub issue](https://github.com/dstackai/migrate-from-slurm/issues) to report errors, suggest improvements, or ask questions about the documentation
+- **Submit a PR**: Submit a [pull request](https://github.com/dstackai/migrate-from-slurm/pulls) with corrections, additions, or improvements to the documentation
+- **Contact directly**: Reach out to [@peterschmidt85](https://github.com/peterschmidt85) on GitHub for direct feedback or questions
+
 ## Project structure
 
-- `concepts/` - Documentation mapping Slurm concepts to their `dstack` equivalents
+- `guide.md` - Main migration guide with practical examples
+- `concepts/` - Detailed documentation mapping Slurm concepts to their `dstack` equivalents
