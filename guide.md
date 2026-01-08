@@ -494,6 +494,15 @@ resources:
 | Manual master address | `DSTACK_MASTER_NODE_IP` | Master node IP (automatically set) |
 | N/A | `DSTACK_MPI_HOSTFILE` | Pre-populated MPI hostfile |
 
+**Nodes and processes comparison:**
+
+| Slurm | dstack | Explanation |
+|-------|--------|-------------|
+| `--nodes=4 --ntasks=8` | `nodes: 4` | Slurm specifies both nodes and total processes; dstack only specifies nodes |
+| `--ntasks-per-node=2` | Determined by `commands` | Slurm controls process distribution; dstack relies on `commands` using frameworks like `torchrun`, `accelerate`, `mpirun`, etc. |
+
+**Key difference:** Slurm explicitly controls both nodes and processes/tasks. dstack only specifies nodes; processes per node are determined by the user's `commands` using frameworks like `torchrun`, `accelerate`, `mpirun`, etc. (e.g., `torchrun --nproc_per_node=$DSTACK_GPUS_PER_NODE`).
+
 ### Queueing and scheduling
 
 Queueing and scheduling determine when and how jobs are executed. Both systems support scheduling large jobs and efficient resource utilization, with different implementation approaches.
