@@ -8,7 +8,7 @@ This guide provides a comprehensive comparison between Slurm and dstack workload
 
 Both Slurm and dstack are open-source workload orchestration systems designed to manage compute resources and schedule jobs. However, they target different deployment models:
 
-- **Slurm**: Optimized for HPC and AI workloads on static on-premises clusters. Focuses on job scheduling, queuing, and resource management in pre-configured environments. Widely deployed in academic and research institutions for large-scale distributed training.
+- **Slurm**: Optimized for HPC and AI workloads on static clusters (on-premises or cloud). Focuses on job scheduling, queuing, and resource management in pre-configured environments. Can be deployed in cloud environments using additional integrations, but cloud support is not native and may have limitations. Widely deployed in academic and research institutions for large-scale distributed training.
 - **dstack**: Designed for AI workloads (development, training, inference) with cloud-native architecture. Supports large-scale distributed training, day-to-day development workflows, and production-grade inference. Optimized for ML engineers and researchers leveraging GPU cloud capacity with dynamic provisioning and container-based execution.
 
 ### Shared capabilities
@@ -27,9 +27,9 @@ Both systems provide the following core capabilities:
 
 The systems differ in the following key areas:
 
-- **Use-case scope**: Slurm targets HPC and AI workloads on on-premises clusters, while dstack is use-case agnostic and supports any containerized workload (development, training, inference, services)
+- **Use-case scope**: Slurm targets HPC and AI workloads on static clusters (on-premises or cloud), while dstack is use-case agnostic and supports any containerized workload (development, training, inference, services)
 - **Architecture**: Slurm uses native process execution on static nodes (workloads have direct access to the host), while dstack uses a container-first architecture where all workloads run in Docker containers. Slurm supports containers as an optional feature, while dstack is designed with containers as a core architectural principle
-- **Infrastructure model**: Slurm assumes static, pre-configured nodes, while dstack provides native cloud provisioning support, dynamically provisioning clusters and instances as needed. dstack natively integrates with leading GPU cloud providers (Lambda, Nebius, RunPod, Vast.ai, Verda, AWS, GCP) for GPU instance provisioning
+- **Infrastructure model**: Slurm assumes static, pre-configured nodes. While Slurm can run in cloud environments using additional integrations, cloud support is not native and may have limitations. dstack provides native cloud provisioning support, dynamically provisioning clusters and instances as needed without additional tooling. dstack natively integrates with leading GPU cloud providers (AWS, GCP, Nebius, Lambda, Verda, RunPod, Hot Aisle, Vast.ai, etc) for GPU instance provisioning
 - **Backend flexibility**: Slurm requires dedicated compute nodes, while dstack supports Kubernetes (as a container-based backend) or VM-based backends and SSH fleets, providing flexibility to match your infrastructure requirements
 - **Resource model**: Slurm manages static nodes with fixed resources, while dstack uses dynamic instance provisioning that scales based on demand
 
@@ -144,7 +144,7 @@ For detailed multi-node distributed training examples, refer to the [Multi-node 
 | Shell script with `#SBATCH` directives | YAML configuration file (`.dstack.yml`) | Slurm uses executable scripts; dstack uses declarative YAML |
 | `--gres=gpu:1` | `gpu: 1` | Both specify GPU count (dstack can also specify GPU type and memory range) |
 | `--mem=32G` | `memory: 32GB` | Slurm exact value; dstack supports ranges (minimum requirement) |
-| `--time=2:00:00` | `max_duration: 2h` | Slurm enforces walltime; dstack uses for cost control |
+| `--time=2:00:00` | `max_duration: 2h` | Both enforce walltime—the run is automatically stopped after the duration elapses |
 | `--partition=gpu` | Fleet selection (automatic or explicit) | Slurm requires partition; dstack auto-selects or uses `fleets` property |
 | `--output=train-%j.out` | Logs via `dstack logs` or UI | Slurm writes files; dstack streams logs via API |
 | `export VAR` or `--export=ALL,VAR=value` | `env: - VAR` or `--env VAR=value` | Environment variables in Slurm; dstack supports both definition in YAML and CLI override |
@@ -178,7 +178,7 @@ Both systems support containerized execution, with different implementation appr
 
 #### Slurm container execution
 
-Slurm supports container execution using Singularity/Apptainer or Enroot. The container image must exist on a shared filesystem or be pulled from a registry:
+Slurm supports container execution using Singularity/Apptainer, Enroot, or Pyxis (Docker plugin). The container image must exist on a shared filesystem or be pulled from a registry:
 
 ```bash
 #!/bin/bash
@@ -191,6 +191,19 @@ Slurm supports container execution using Singularity/Apptainer or Enroot. The co
 # Container image must exist on shared filesystem
 # GPUs automatically available inside container
 srun python train.py --batch-size=64
+```
+
+**Using Pyxis with Enroot (pulls from registry):**
+```bash
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --gres=gpu:1
+#SBATCH --mem=32G
+#SBATCH --time=2:00:00
+
+# Pyxis plugin enables Docker container support
+srun --container-image=pytorch/pytorch:2.0.0-cuda11.8-cudnn8-runtime \
+  python train.py --batch-size=64
 ```
 
 **Using Enroot (pulls from registry):**
@@ -321,25 +334,25 @@ Slurm provides environment variables for distributed coordination. You must manu
 #!/bin/bash
 #SBATCH --job-name=distributed-train
 #SBATCH --nodes=4
-#SBATCH --ntasks=32          # 32 GPUs total (8 per node)
+#SBATCH --ntasks-per-node=1  # One task per node
 #SBATCH --gres=gpu:8         # 8 GPUs per node
 #SBATCH --mem=200G
 #SBATCH --time=24:00:00
 #SBATCH --partition=gpu
 
 # Set up distributed training environment
-export MASTER_ADDR=$(scontrol show hostnames $SLURM_NODELIST | head -n1)
-export MASTER_PORT=12345
-export WORLD_SIZE=$SLURM_NTASKS
-export RANK=$SLURM_PROCID
+MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
+MASTER_PORT=12345
 
-# Launch training with torchrun
-srun python -m torch.distributed.launch \
+export MASTER_ADDR MASTER_PORT
+
+# Launch training with torchrun (torch.distributed.launch is deprecated)
+srun torchrun \
+  --nnodes="$SLURM_JOB_NUM_NODES" \
   --nproc_per_node=8 \
-  --nnodes=$SLURM_JOB_NUM_NODES \
-  --node_rank=$SLURM_NODEID \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
+  --node_rank="$SLURM_NODEID" \
+  --rdzv_backend=c10d \
+  --rdzv_endpoint="$MASTER_ADDR:$MASTER_PORT" \
   train.py \
   --model llama-7b \
   --batch-size=32 \
@@ -402,7 +415,7 @@ max_duration: 24h
 
 #### Slurm MPI (NCCL tests)
 
-This example demonstrates running NCCL tests using MPI, which is useful for validating multi-node GPU communication. Slurm handles MPI coordination automatically:
+`$SLURM_JOB_NODELIST` is a string, so it must be converted to a hostfile format for `mpirun`:
 
 ```bash
 #!/bin/bash
@@ -415,14 +428,19 @@ This example demonstrates running NCCL tests using MPI, which is useful for vali
 export MASTER_ADDR=$(scontrol show hostnames $SLURM_NODELIST | head -n1)
 export MASTER_PORT=12345
 
+# Convert SLURM_JOB_NODELIST to hostfile format
+HOSTFILE=$(mktemp)
+scontrol show hostnames $SLURM_JOB_NODELIST | awk -v slots=$SLURM_NTASKS_PER_NODE '{print $0" slots="slots}' > $HOSTFILE
+
 # MPI with NCCL tests or custom MPI application
-srun mpirun \
+mpirun \
   --allow-run-as-root \
-  --hostfile $SLURM_JOB_NODELIST \
+  --hostfile $HOSTFILE \
   -n $SLURM_NTASKS \
-  -N $SLURM_NTASKS_PER_NODE \
   --bind-to none \
   /opt/nccl-tests/build/all_reduce_perf -b 8 -e 8G -f 2 -g 1
+
+rm -f $HOSTFILE
 ```
 
 #### dstack MPI (NCCL tests)
@@ -821,10 +839,10 @@ python train.py \
 
 dstack uses explicit volume mounting—you must specify which volumes to mount and where. dstack supports two types of volumes:
 
-**Network volumes**: Persistent storage (AWS EBS, GCP persistent disks, RunPod volumes) that persists across runs. Network volumes are shared across all nodes in a multi-node job, but have limitations:
+**Network volumes**: Persistent storage (AWS EBS, GCP persistent disks, RunPod volumes) that persists across runs. Network volumes have limitations:
 - Network latency for I/O operations
 - May not be available in all regions or zones
-- Can use interpolation to attach different volumes to different nodes within the same run: `- name: dataset-${{ dstack.node_rank }}` (useful for single-attach volumes with distributed tasks)
+- **Distributed tasks**: Currently, no backend supports multi-attach network volumes for distributed tasks. For distributed tasks, use interpolation to attach different volumes to different nodes within the same run: `- name: dataset-${{ dstack.node_rank }}` (each node gets its own single-attach volume)
 - **Backend support**: Network volumes are currently supported for the `aws`, `gcp`, and `runpod` backends
 
 **Instance volumes**: Local storage on the instance that persists for the lifetime of the instance. Instance volumes are faster than network volumes but are tied to the instance lifecycle.
@@ -998,8 +1016,9 @@ salloc --nodes=1 --gres=gpu:1 --time=4:00:00
 srun hostname
 srun python experiment.py
 
-# Or SSH to allocated node
-ssh $SLURM_NODELIST
+# Get interactive shell on allocated node
+# (SLURM_NODELIST is a string, so use srun --pty for interactive access)
+srun --pty bash
 
 # Work interactively
 python train.py --epochs=1  # Quick test
