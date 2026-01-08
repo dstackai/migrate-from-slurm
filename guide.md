@@ -488,7 +488,8 @@ resources:
 | Slurm | dstack | Purpose |
 |-------|--------|---------|
 | `SLURM_NODELIST` | `DSTACK_NODES_IPS` | Newline-delimited list of node IPs |
-| `SLURM_PROCID` | `DSTACK_NODE_RANK` | Process/node rank |
+| `SLURM_NODEID` | `DSTACK_NODE_RANK` | Node rank (0-based) |
+| `SLURM_PROCID` | N/A | Process rank (0-based, across all processes) |
 | `SLURM_NTASKS` | `DSTACK_GPUS_NUM` | Total number of processes/GPUs |
 | `SLURM_JOB_NUM_NODES` | `DSTACK_NODES_NUM` | Number of nodes |
 | Manual master address | `DSTACK_MASTER_NODE_IP` | Master node IP (automatically set) |
@@ -1480,7 +1481,7 @@ retry:
 max_duration: 48h
 ```
 
-Training scripts should check for existing checkpoints on startup and resume from the last checkpoint when retried after failure or interruption.
+**Note:** dstack does not currently support graceful shutdown signals (equivalent to Slurm's `--signal` directive) to notify processes before termination. Training scripts should implement proactive checkpointing to handle unexpected terminations and check for existing checkpoints on startup to resume from the last checkpoint when retried after failure or interruption.
 
 ### GPU health monitoring
 
