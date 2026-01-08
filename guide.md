@@ -310,8 +310,8 @@ Multi-node distributed training is essential for training large models that exce
 
 **Key aspects:**
 - **Process coordination**: Slurm provides environment variables (`SLURM_NODELIST`, `SLURM_PROCID`) for process coordination, while dstack provides `DSTACK_*` environment variables
-- **Cluster placement**: Distributed tasks in dstack require fleets with `placement: cluster` configured. This ensures instances are provisioned with optimal inter-node connectivity (InfiniBand, EFA, GPUDirect) for high-bandwidth GPU communication. Cluster placement is separate from topology-aware scheduling (which dstack does not support automatically except in specific backend cases)
-- **Topology-aware scheduling**: dstack does not support automatic topology-aware scheduling (placing jobs on physically close nodes) except in specific cases: AWS fleets with cluster placement automatically configure EFA networking when supported, and GCP fleets automatically configure GPUDirect-TCPXO/GPUDirect-TCPX or RoCE networking for certain instance types. For other cases, manually configure network topology in scripts
+- **Cluster placement**: Distributed tasks in dstack require fleets with `placement: cluster` configured. This ensures instances are provisioned with optimal inter-node connectivity (InfiniBand, EFA, GPUDirect) for high-bandwidth GPU communication
+- **Topology-aware scheduling**: dstack does not allow configuring topology for SSH fleets. For backend fleets, topology-aware scheduling may depend on the particular backend (particular cloud or particular Kubernetes cluster). However, even if the backend supports topology-aware provisioning, there is no way to leverage it for dstack tasks
 
 #### Slurm PyTorch DDP training
 
@@ -348,7 +348,7 @@ srun python -m torch.distributed.launch \
 
 #### dstack PyTorch DDP training
 
-dstack automatically sets up environment variables for distributed coordination. Distributed tasks require a fleet with `placement: cluster` configured to ensure optimal inter-node connectivity. On AWS, EFA networking is automatically configured when supported. On GCP, GPUDirect-TCPXO/GPUDirect-TCPX or RoCE networking is automatically configured for certain instance types (A3 Mega, A3 High, A4). On other backends, networking must be manually configured.
+dstack automatically sets up environment variables for distributed coordination. Distributed tasks require a fleet with `placement: cluster` configured to ensure optimal inter-node connectivity. Fast interconnect is automatically configured on supported backends.
 
 dstack automatically injects the following environment variables into each container:
 - `DSTACK_NODES_NUM`: Total number of nodes
@@ -491,7 +491,6 @@ Queueing and scheduling determine when and how jobs are executed. Both systems s
 - No backfill or preemption (jobs run until completion)
 - No fairshare, QOS, or usage quotas (priority is the only scheduling mechanism)
 - Retry policy: Jobs can be automatically retried on no-capacity, failure, or interruption (see retry policy below). The no-capacity event is important for queueing on limited capacity.
-- Topology-aware scheduling: dstack does not support automatic topology-aware scheduling (placing jobs on physically close nodes) except in specific cases: AWS fleets with cluster placement automatically configure EFA networking when supported, and GCP fleets automatically configure GPUDirect-TCPXO/GPUDirect-TCPX or RoCE networking for certain instance types. For other cases, manually configure network topology in scripts
 - Heterogeneous jobs: dstack does not support heterogeneous jobs. All jobs within a run must use the same resource specification
 
 #### Slurm queueing
@@ -690,7 +689,7 @@ dstack delete -f fleet.dstack.yml
 - **Instance exclusivity**: Each instance belongs to exactly one fleet (unlike Slurm partitions where nodes can belong to multiple partitions). This ensures clear resource ownership and simplifies provisioning logic.
 - **Automatic selection**: There is no default fleet requirement. dstack automatically selects a fleet based on resource requirements and cost optimization. You can explicitly specify a fleet using the `fleets` property in your task configuration.
 - **Resource definition**: Fleets define both resource requirements (GPU type, memory, etc.) and provisioning behavior (spot policy, placement, blocks). When a job needs resources, dstack provisions instances from matching fleets.
-- **Distributed training requirement**: Tasks with `nodes: 2` or more require a fleet with `placement: cluster` configured. This ensures instances are provisioned with optimal inter-node connectivity for high-bandwidth GPU communication. On AWS, EFA networking is automatically configured when supported. On GCP, GPUDirect-TCPXO/GPUDirect-TCPX or RoCE networking is automatically configured for certain instance types. On other backends, networking must be manually configured. Without `placement: cluster`, distributed training performance will be severely degraded.
+- **Distributed training requirement**: Tasks with `nodes: 2` or more require a fleet with `placement: cluster` configured. This ensures instances are provisioned with optimal inter-node connectivity for high-bandwidth GPU communication. Fast interconnect is automatically configured on supported backends: AWS (EFA), GCP (GPUDirect-TCPXO/GPUDirect-TCPX or RoCE for A3 Mega, A3 High, A4), Nebius (InfiniBand), and RunPod (InfiniBand). On other backends, networking must be manually configured. Without `placement: cluster`, distributed training performance will be severely degraded.
 - **Project isolation**: Fleets belong to projects and are not shared across projects. Sharing fleets across projects and managing quotas is not currently supported in dstack.
 
 ### Backend configuration
@@ -788,7 +787,7 @@ Data access patterns differ between Slurm and dstack:
 - **Slurm**: Relies on shared filesystems (NFS, Lustre, GPFS) with a global namespace, meaning the same path exists on all nodes
 - **dstack**: Uses explicit volume mounting—you must specify which volumes to mount and where. dstack supports shared filesystems via SSH fleets (using instance volumes with pre-mounted network storage). For backend fleets, mounting shared storage via instance volumes is not straightforward and may require dedicated endpoints. Volumes are the main interface
 - **Slurm**: Provides `$SLURM_TMPDIR` for local scratch space (auto-cleaned)
-- **dstack**: Uses instance volumes that persist on the instance. Instance volumes can leverage shared filesystems (NFS, SMB) when using SSH fleets where users control the instances and can pre-mount network storage. For backend fleets, mounting shared storage via instance volumes is not straightforward and may require dedicated endpoints
+- **dstack**: Uses instance volumes for local storage that persists for the lifetime of the instance. Instance volumes can be used for caching or, with SSH fleets, can leverage pre-mounted shared filesystems (NFS, SMB). With backend fleets, mounting shared storage via instance volumes is not supported
 
 #### Slurm shared filesystem
 
@@ -825,7 +824,7 @@ dstack uses explicit volume mounting—you must specify which volumes to mount a
 **Network volumes**: Persistent storage (AWS EBS, GCP persistent disks, RunPod volumes) that persists across runs. Network volumes are shared across all nodes in a multi-node job, but have limitations:
 - Network latency for I/O operations
 - May not be available in all regions or zones
-- Can use interpolation to select from multiple volumes: `- name: dataset-${{ dstack.node_rank }}` (selects volume based on node rank)
+- Can use interpolation to attach different volumes to different nodes within the same run: `- name: dataset-${{ dstack.node_rank }}` (useful for single-attach volumes with distributed tasks)
 - **Backend support**: Network volumes are currently supported for the `aws`, `gcp`, and `runpod` backends
 
 **Instance volumes**: Local storage on the instance that persists for the lifetime of the instance. Instance volumes are faster than network volumes but are tied to the instance lifecycle.
@@ -835,7 +834,7 @@ dstack uses explicit volume mounting—you must specify which volumes to mount a
 - **SSH fleets**: Support shared filesystems (NFS, Lustre, GPFS) via instance volumes with pre-mounted network storage.
 - **Backend fleets**: Currently, there is no way to mount shared filesystems with backend fleets.
 - **Network volumes**: Cannot be used as shared filesystems (they are single-attach per backend, except RunPod).
-- **Data sharing**: To share data between multiple runs, use network volumes with interpolation (`- name: dataset-${{ dstack.node_rank }}`) or instance volumes with manually mounted shared filesystems on SSH fleets.
+- **Data sharing**: To share data between multiple runs, use network volumes (the same volume can be attached to different runs, but only selected backends support multi-attach network volumes) or instance volumes with manually mounted shared filesystems on SSH fleets. Backend fleets do not allow mounting shared filesystems with instance volumes yet.
 
 **Create network volume for datasets:**
 
@@ -887,9 +886,8 @@ repos:
 
 volumes:
   # Instance volume (faster I/O, backed by instance's local storage)
-  - name: checkpoint-cache
+  - instance_path: /dstack-cache/checkpoints
     path: /checkpoints
-    instance: true
 
 commands:
   - python train.py --checkpoint-dir=/checkpoints --epochs=100
@@ -916,9 +914,8 @@ volumes:
   - name: imagenet-dataset
     path: /data/imagenet
   # Instance volume (per-node, faster I/O)
-  - name: checkpoint-cache
+  - instance_path: /dstack-cache/checkpoints
     path: /checkpoints
-    instance: true
 
 commands:
   - |
