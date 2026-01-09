@@ -54,6 +54,80 @@ For parallel jobs requesting multiple nodes (e.g., `-N 4`), Slurm utilizes **Spa
 - **Topology awareness**: If configured, Slurm attempts to place the job on nodes that are physically close (same switch/rack) to minimize network latency.
 - **Fragmentation**: The all-or-nothing requirement creates "holes" (fragmentation) in the cluster where nodes sit idle waiting for their peers to free up. This is the primary driver for using **Backfill Scheduling**.
 
+#### Topology-aware scheduling
+
+Topology-aware scheduling optimizes job placement by considering the physical network and hardware topology of the cluster. This minimizes communication latency for multi-node distributed workloads by keeping related tasks on switches that are close to each other.
+
+#### Configuration
+
+Topology-aware scheduling generally requires `SelectType=select/cons_tres` in `slurm.conf` to function effectively with modern resources (like GPUs).
+
+**1. Configure `slurm.conf`**
+Ensure the following is set in your `slurm.conf` (this configuration must be consistent across all nodes in the cluster):
+
+```bash
+# Enable the Tree topology plugin (standard for fat-tree, dragonfly, and hierarchical networks)
+TopologyPlugin=topology/tree
+
+# Required for hierarchical topology to work optimally with GPUs/Trackable resources
+SelectType=select/cons_tres
+```
+
+*Note: If using a Dragonfly network, add `TopologyParam=dragonfly`.*
+
+**2. Define the Layout in `topology.conf`**
+Create a `topology.conf` file in the same directory as `slurm.conf` (e.g., `/etc/slurm/`). This file defines the switch hierarchy.
+
+*Note: While `LinkSpeed` can be defined in this file, it is currently informational only and is not used by the scheduler for optimization.*
+
+**Example: `topology.conf`**
+```bash
+# Level 1: Leaf switches connected to compute nodes
+SwitchName=switch1 Nodes=node[00-03]
+SwitchName=switch2 Nodes=node[04-07]
+
+# Level 2: Spine switches connecting the leaves
+SwitchName=root Switches=switch1,switch2
+```
+
+**3. Intra-node Topology (NVLink/GPUs)**
+The `topology.conf` file controls **inter-node** (network) topology.
+To optimize for **intra-node** topology (e.g., NVLink between GPUs inside a node), you must configure `gres.conf`.
+*   **Automatic:** Set `AutoDetect=nvml` in `gres.conf`.
+*   **Manual:** Manually define `Type`, `File`, and `Links` in `gres.conf`.
+
+**4. Apply Changes**
+After creating the files, restart the Slurm controller. If this is the first time enabling the topology plugin, you must also restart the `slurmd` daemons on the compute nodes.
+```bash
+systemctl restart slurmctld
+# On compute nodes:
+systemctl restart slurmd
+```
+
+#### Job submission options
+
+Use the `--switches` flag to request topology-aware placement.
+
+*   **`--switches=<count>[@<time>]`**: Defines the maximum number of switches the job is allowed to span.
+    *   It is best practice to include the `@time` option. This tells the scheduler: "Try to find nodes on X switches for this amount of time; if impossible, ignore the constraint and run the job anyway." Without the time limit, the job may pend indefinitely.
+
+**Note:** Do not use `--contiguous` with `topology/tree`. That flag only works with `topology/flat` and will be ignored or cause issues in a tree topology.
+
+**Example: requesting topology-aware placement**
+```bash
+#!/bin/bash
+#SBATCH --nodes=4
+#SBATCH --gres=gpu:4
+#SBATCH --switches=1@00:10:00
+
+# Explanation of --switches=1@00:10:00:
+# 1. Attempt to place all 4 nodes on a single switch (switches=1).
+# 2. If those resources are not available, keep the job pending for 10 minutes.
+# 3. After 10 minutes, allow the job to run on nodes spanning multiple switches.
+
+srun python distributed_train.py
+```
+
 ### Backfill scheduling mechanics
 
 The backfill scheduler is the engine of cluster efficiency. It allows lower-priority jobs to start *now* if they do not delay the start time of the highest-priority jobs.
@@ -226,4 +300,4 @@ dstack has some limitations compared to Slurm's scheduling capabilities.
 - **Preemption**: dstack does not support job preemption. Once a job is running, it cannot be preempted by a higher-priority job.
 - **Job dependencies**: dstack does not support job dependencies. Use external workflow frameworks (e.g., Airflow, Prefect) that submit dstack runs based on dependency logic.
 - **Heterogeneous jobs**: dstack does not support heterogeneous jobs. All jobs within a run must use the same resource specification.
-- **Topology-aware scheduling**: dstack does not support automatic topology-aware scheduling except in specific cases: AWS fleets with cluster placement automatically configure EFA networking when supported, and GCP fleets automatically configure GPUDirect-TCPXO/GPUDirect-TCPX or RoCE networking for certain instance types. For other cases, manually configure network topology in scripts.
+- **Topology-aware scheduling**: dstack does not support topology-aware scheduling when submitting tasks. The scheduler does not make placement decisions based on network topology constraints (e.g., `--switches` flags, `topology.conf` files). Note that dstack may automatically configure optimal inter-node networking (EFA on AWS, GPUDirect/RoCE on GCP, InfiniBand on Nebius/Runpod) when using fleets with `placement: cluster` on supported backends, or SSH fleets where the interconnect network is pre-configured, but this configures the network infrastructure rather than enabling topology-aware job placement.
